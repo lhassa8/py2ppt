@@ -7,12 +7,12 @@ their structure, layouts, and style elements.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from ..core.presentation import Presentation
-from ..oxml.layout import get_layout_info_list, LayoutInfo
+from ..oxml.layout import get_layout_info_list
 from ..oxml.theme import get_theme_part
 
 
@@ -21,9 +21,9 @@ class PlaceholderAnalysis:
     """Analysis of a single placeholder."""
 
     type: str
-    idx: Optional[int]
+    idx: int | None
     name: str
-    bounds: Dict[str, int]  # x, y, cx, cy in EMUs
+    bounds: dict[str, int]  # x, y, cx, cy in EMUs
 
 
 @dataclass
@@ -32,27 +32,27 @@ class LayoutAnalysis:
 
     name: str
     index: int
-    placeholders: Dict[str, PlaceholderAnalysis] = field(default_factory=dict)
+    placeholders: dict[str, PlaceholderAnalysis] = field(default_factory=dict)
 
 
 @dataclass
 class ThemeAnalysis:
     """Analysis of theme colors and fonts."""
 
-    colors: Dict[str, str] = field(default_factory=dict)  # name -> hex
-    fonts: Dict[str, str] = field(default_factory=dict)  # role -> font name
+    colors: dict[str, str] = field(default_factory=dict)  # name -> hex
+    fonts: dict[str, str] = field(default_factory=dict)  # role -> font name
 
 
 @dataclass
 class TemplateAnalysis:
     """Complete analysis of a PowerPoint template."""
 
-    layouts: Dict[str, LayoutAnalysis] = field(default_factory=dict)
+    layouts: dict[str, LayoutAnalysis] = field(default_factory=dict)
     theme: ThemeAnalysis = field(default_factory=ThemeAnalysis)
-    slide_size: Dict[str, int] = field(default_factory=dict)  # width, height
-    custom_layouts: List[str] = field(default_factory=list)
+    slide_size: dict[str, int] = field(default_factory=dict)  # width, height
+    custom_layouts: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
 
@@ -61,7 +61,7 @@ class TemplateAnalysis:
         return json.dumps(self.to_dict(), indent=indent)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TemplateAnalysis":
+    def from_dict(cls, data: dict[str, Any]) -> TemplateAnalysis:
         """Create from dictionary."""
         analysis = cls()
 
@@ -98,7 +98,7 @@ class TemplateAnalysis:
 
 
 def analyze_template(
-    template_path: Union[str, Path],
+    template_path: str | Path,
 ) -> TemplateAnalysis:
     """Analyze a PowerPoint template in depth.
 
@@ -193,7 +193,7 @@ def analyze_template(
 
 def export_template_schema(
     analysis: TemplateAnalysis,
-    output_path: Union[str, Path],
+    output_path: str | Path,
 ) -> None:
     """Export template analysis to a JSON file.
 
@@ -216,7 +216,7 @@ def export_template_schema(
 
 
 def load_template_schema(
-    schema_path: Union[str, Path],
+    schema_path: str | Path,
 ) -> TemplateAnalysis:
     """Load template analysis from a JSON file.
 

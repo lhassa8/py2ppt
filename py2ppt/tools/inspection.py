@@ -7,12 +7,12 @@ the template/presentation before making modifications.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..core.presentation import Presentation
 
 
-def list_layouts(presentation: Presentation) -> List[Dict[str, Any]]:
+def list_layouts(presentation: Presentation) -> list[dict[str, Any]]:
     """List all available layouts in the presentation.
 
     Args:
@@ -63,7 +63,7 @@ def list_layouts(presentation: Presentation) -> List[Dict[str, Any]]:
 def describe_slide(
     presentation: Presentation,
     slide_number: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get detailed information about a slide.
 
     Args:
@@ -95,7 +95,7 @@ def describe_slide(
 def get_placeholders(
     presentation: Presentation,
     slide_number: int,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Get all placeholder content from a slide.
 
     Args:
@@ -125,7 +125,7 @@ def get_placeholders(
     return result
 
 
-def get_theme_colors(presentation: Presentation) -> Dict[str, str]:
+def get_theme_colors(presentation: Presentation) -> dict[str, str]:
     """Get theme colors from the presentation.
 
     Args:
@@ -155,7 +155,7 @@ def get_theme_colors(presentation: Presentation) -> Dict[str, str]:
     return presentation.get_theme_colors()
 
 
-def get_theme_fonts(presentation: Presentation) -> Dict[str, str]:
+def get_theme_fonts(presentation: Presentation) -> dict[str, str]:
     """Get theme fonts from the presentation.
 
     Args:

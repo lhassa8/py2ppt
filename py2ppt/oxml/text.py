@@ -14,26 +14,25 @@ DrawingML text is structured as:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from lxml import etree
 
-from .ns import nsmap, qn
+from .ns import qn
 
 
 @dataclass
 class RunProperties:
     """Run-level text formatting."""
 
-    font_family: Optional[str] = None
-    font_size: Optional[int] = None  # in hundredths of a point (centipoints)
-    bold: Optional[bool] = None
-    italic: Optional[bool] = None
-    underline: Optional[bool] = None
-    color: Optional[str] = None  # hex color without #
-    theme_color: Optional[str] = None  # e.g., "accent1"
+    font_family: str | None = None
+    font_size: int | None = None  # in hundredths of a point (centipoints)
+    bold: bool | None = None
+    italic: bool | None = None
+    underline: bool | None = None
+    color: str | None = None  # hex color without #
+    theme_color: str | None = None  # e.g., "accent1"
 
-    def to_element(self) -> Optional[etree._Element]:
+    def to_element(self) -> etree._Element | None:
         """Create rPr element. Returns None if no properties set."""
         if all(
             v is None
@@ -78,7 +77,7 @@ class RunProperties:
         return rpr
 
     @classmethod
-    def from_element(cls, elem: Optional[etree._Element]) -> "RunProperties":
+    def from_element(cls, elem: etree._Element | None) -> RunProperties:
         """Parse rPr element."""
         if elem is None:
             return cls()
@@ -142,7 +141,7 @@ class Run:
         return r
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "Run":
+    def from_element(cls, elem: etree._Element) -> Run:
         """Parse a:r element."""
         text = ""
         t_elem = elem.find(qn("a:t"))
@@ -160,8 +159,8 @@ class ParagraphProperties:
     """Paragraph-level formatting."""
 
     level: int = 0  # Bullet level (0 = top level)
-    alignment: Optional[str] = None  # "l", "ctr", "r", "just"
-    bullet: Optional[bool] = None  # True = bulleted, False = no bullet, None = inherit
+    alignment: str | None = None  # "l", "ctr", "r", "just"
+    bullet: bool | None = None  # True = bulleted, False = no bullet, None = inherit
 
     def to_element(self) -> etree._Element:
         """Create pPr element."""
@@ -179,7 +178,7 @@ class ParagraphProperties:
         return ppr
 
     @classmethod
-    def from_element(cls, elem: Optional[etree._Element]) -> "ParagraphProperties":
+    def from_element(cls, elem: etree._Element | None) -> ParagraphProperties:
         """Parse pPr element."""
         if elem is None:
             return cls()
@@ -208,9 +207,9 @@ class ParagraphProperties:
 class Paragraph:
     """A paragraph containing runs of text."""
 
-    runs: List[Run] = field(default_factory=list)
+    runs: list[Run] = field(default_factory=list)
     properties: ParagraphProperties = field(default_factory=ParagraphProperties)
-    end_para_rpr: Optional[RunProperties] = None  # End paragraph run properties
+    end_para_rpr: RunProperties | None = None  # End paragraph run properties
 
     @property
     def text(self) -> str:
@@ -220,10 +219,7 @@ class Paragraph:
     @text.setter
     def text(self, value: str) -> None:
         """Set text, replacing all runs with a single run."""
-        if self.runs:
-            props = self.runs[0].properties
-        else:
-            props = RunProperties()
+        props = self.runs[0].properties if self.runs else RunProperties()
         self.runs = [Run(text=value, properties=props)]
 
     def to_element(self) -> etree._Element:
@@ -252,7 +248,7 @@ class Paragraph:
         return p
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "Paragraph":
+    def from_element(cls, elem: etree._Element) -> Paragraph:
         """Parse a:p element."""
         para = cls()
 
@@ -282,7 +278,7 @@ class Paragraph:
 class TextBody:
     """A text body (txBody) containing paragraphs."""
 
-    paragraphs: List[Paragraph] = field(default_factory=list)
+    paragraphs: list[Paragraph] = field(default_factory=list)
     body_properties: dict = field(default_factory=dict)
 
     @property
@@ -319,7 +315,7 @@ class TextBody:
         return tx_body
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "TextBody":
+    def from_element(cls, elem: etree._Element) -> TextBody:
         """Parse txBody element."""
         tb = cls()
 
@@ -337,10 +333,10 @@ class TextBody:
 
 def create_text_body(
     text: str,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> etree._Element:
     """Create a simple text body element.
 
@@ -369,10 +365,10 @@ def create_text_body(
 
 
 def create_bullet_body(
-    items: List[str],
-    levels: Optional[List[int]] = None,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    items: list[str],
+    levels: list[int] | None = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
 ) -> etree._Element:
     """Create a text body with bullet points.
 
@@ -389,7 +385,7 @@ def create_bullet_body(
         levels = [0] * len(items)
 
     paragraphs = []
-    for item, level in zip(items, levels):
+    for item, level in zip(items, levels, strict=False):
         props = RunProperties(
             font_size=font_size * 100 if font_size else None,
             font_family=font_family,

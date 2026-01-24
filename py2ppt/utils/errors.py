@@ -8,8 +8,7 @@ This module provides:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
-
+from typing import Any, Generic, TypeVar
 
 # === Exception Classes ===
 
@@ -20,14 +19,14 @@ class Py2PptError(Exception):
     def __init__(
         self,
         message: str,
-        code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code or "UNKNOWN_ERROR"
         self.details = details or {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for structured error responses."""
         return {
             "code": self.code,
@@ -42,11 +41,11 @@ class LayoutNotFoundError(Py2PptError):
     def __init__(
         self,
         layout_name: str,
-        available: Optional[List[str]] = None,
-        suggestion: Optional[str] = None,
+        available: list[str] | None = None,
+        suggestion: str | None = None,
     ) -> None:
         message = f"Layout '{layout_name}' not found in template"
-        details: Dict[str, Any] = {"requested": layout_name}
+        details: dict[str, Any] = {"requested": layout_name}
 
         if available:
             details["available"] = available
@@ -84,10 +83,10 @@ class PlaceholderNotFoundError(Py2PptError):
         self,
         placeholder: str,
         slide_number: int,
-        available: Optional[List[str]] = None,
+        available: list[str] | None = None,
     ) -> None:
         message = f"Placeholder '{placeholder}' not found in slide {slide_number}"
-        details: Dict[str, Any] = {
+        details: dict[str, Any] = {
             "requested": placeholder,
             "slide_number": slide_number,
         }
@@ -102,7 +101,7 @@ class PlaceholderNotFoundError(Py2PptError):
 class InvalidTemplateError(Py2PptError):
     """Template file is invalid or corrupted."""
 
-    def __init__(self, message: str, path: Optional[str] = None) -> None:
+    def __init__(self, message: str, path: str | None = None) -> None:
         details = {}
         if path:
             details["path"] = path
@@ -112,7 +111,7 @@ class InvalidTemplateError(Py2PptError):
 class ContentError(Py2PptError):
     """Error with content (e.g., invalid image, malformed data)."""
 
-    def __init__(self, message: str, content_type: Optional[str] = None) -> None:
+    def __init__(self, message: str, content_type: str | None = None) -> None:
         details = {}
         if content_type:
             details["content_type"] = content_type
@@ -125,10 +124,10 @@ class StyleError(Py2PptError):
     def __init__(
         self,
         message: str,
-        property_name: Optional[str] = None,
-        value: Optional[str] = None,
+        property_name: str | None = None,
+        value: str | None = None,
     ) -> None:
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
         if property_name:
             details["property"] = property_name
         if value:
@@ -147,10 +146,10 @@ class ToolError:
 
     code: str
     message: str
-    suggestion: Optional[str] = None
-    did_you_mean: Optional[str] = None
-    available: Optional[List[str]] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    suggestion: str | None = None
+    did_you_mean: str | None = None
+    available: list[str] | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -170,8 +169,8 @@ class ToolResult(Generic[T]):
     """
 
     success: bool
-    value: Optional[T] = None
-    error: Optional[ToolError] = None
+    value: T | None = None
+    error: ToolError | None = None
 
     def __bool__(self) -> bool:
         """Allow using result in boolean context."""
@@ -190,7 +189,7 @@ class ToolResult(Generic[T]):
             )
         return self.value  # type: ignore
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         if self.success:
             return {"success": True, "value": self.value}
@@ -220,9 +219,9 @@ def error(
     code: str,
     message: str,
     *,
-    suggestion: Optional[str] = None,
-    did_you_mean: Optional[str] = None,
-    available: Optional[List[str]] = None,
+    suggestion: str | None = None,
+    did_you_mean: str | None = None,
+    available: list[str] | None = None,
     **details: Any,
 ) -> ToolResult[Any]:
     """Create an error result.
@@ -267,7 +266,7 @@ def from_exception(exc: Py2PptError) -> ToolResult[Any]:
     )
 
 
-def find_similar(name: str, options: List[str], threshold: float = 0.6) -> Optional[str]:
+def find_similar(name: str, options: list[str], threshold: float = 0.6) -> str | None:
     """Find the most similar option to a given name.
 
     Uses a simple similarity measure (Jaccard index of character n-grams).

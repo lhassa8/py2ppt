@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Tuple, Union
+from typing import BinaryIO
 
+from ..oxml.layout import (
+    LayoutInfo,
+    SlideLayoutPart,
+    get_layout_by_index,
+    get_layout_by_name,
+    get_layout_info_list,
+)
+from ..oxml.ns import CONTENT_TYPE, REL_TYPE
 from ..oxml.package import Package, create_blank_package
 from ..oxml.presentation import (
     PresentationPart,
@@ -14,25 +21,15 @@ from ..oxml.presentation import (
 )
 from ..oxml.slide import (
     SlidePart,
-    get_slide_part,
     add_slide_to_package,
-    update_slide_in_package,
+    get_slide_part,
     remove_slide_from_package,
 )
-from ..oxml.layout import (
-    SlideLayoutPart,
-    get_layout_by_name,
-    get_layout_by_index,
-    get_layout_info_list,
-    LayoutInfo,
-)
-from ..oxml.master import get_primary_master, SlideMasterPart
-from ..oxml.theme import get_theme_part, ThemePart
-from ..oxml.ns import CONTENT_TYPE, REL_TYPE
+from ..oxml.theme import ThemePart, get_theme_part
 from ..utils.errors import (
+    InvalidTemplateError,
     LayoutNotFoundError,
     SlideNotFoundError,
-    InvalidTemplateError,
     find_similar,
 )
 from .slide import Slide
@@ -52,9 +49,9 @@ class Presentation:
         to create instances.
         """
         self._package = package
-        self._pres_part: Optional[PresentationPart] = None
-        self._theme: Optional[ThemePart] = None
-        self._layouts: Optional[List[LayoutInfo]] = None
+        self._pres_part: PresentationPart | None = None
+        self._theme: ThemePart | None = None
+        self._layouts: list[LayoutInfo] | None = None
         self._dirty = False
 
     @property
@@ -107,17 +104,17 @@ class Presentation:
 
         return Slide(slide_part, slide_number, self)
 
-    def get_layouts(self) -> List[LayoutInfo]:
+    def get_layouts(self) -> list[LayoutInfo]:
         """Get information about all available layouts."""
         if self._layouts is None:
             self._layouts = get_layout_info_list(self._package)
         return self._layouts
 
-    def get_layout_names(self) -> List[str]:
+    def get_layout_names(self) -> list[str]:
         """Get list of layout names."""
         return [layout.name for layout in self.get_layouts()]
 
-    def get_theme_colors(self) -> Dict[str, str]:
+    def get_theme_colors(self) -> dict[str, str]:
         """Get theme colors as name -> hex color dict."""
         if self._theme is None:
             self._theme = get_theme_part(self._package)
@@ -126,7 +123,7 @@ class Presentation:
             return {name: f"#{rgb}" for name, rgb in colors.items()}
         return {}
 
-    def get_theme_fonts(self) -> Dict[str, str]:
+    def get_theme_fonts(self) -> dict[str, str]:
         """Get theme fonts as role -> font name dict."""
         if self._theme is None:
             self._theme = get_theme_part(self._package)
@@ -140,8 +137,8 @@ class Presentation:
 
     def add_slide(
         self,
-        layout: Union[str, int] = 0,
-        position: Optional[int] = None,
+        layout: str | int = 0,
+        position: int | None = None,
     ) -> Slide:
         """Add a new slide.
 
@@ -177,7 +174,7 @@ class Presentation:
 
         # Copy placeholders from layout to slide
         for ph in layout_part.get_placeholders():
-            from ..oxml.shapes import Shape, PlaceholderInfo, Position, TextFrame
+            from ..oxml.shapes import PlaceholderInfo, Position, Shape, TextFrame
 
             shape = Shape(
                 id=slide_part.shape_tree._next_id,
@@ -247,8 +244,8 @@ class Presentation:
         if slide_number < 1 or slide_number > self.slide_count:
             raise SlideNotFoundError(slide_number, self.slide_count)
 
-        # Get the slide to duplicate
-        original = self.get_slide(slide_number)
+        # Get the slide to duplicate (kept for future content copying)
+        _original = self.get_slide(slide_number)
 
         # Add new slide with same layout
         # For now, use first layout - proper implementation would copy layout info
@@ -260,7 +257,7 @@ class Presentation:
 
         return new_slide
 
-    def reorder_slides(self, new_order: List[int]) -> None:
+    def reorder_slides(self, new_order: list[int]) -> None:
         """Reorder slides.
 
         Args:
@@ -293,7 +290,7 @@ class Presentation:
 
         self._dirty = True
 
-    def save(self, path: Union[str, Path, BinaryIO]) -> None:
+    def save(self, path: str | Path | BinaryIO) -> None:
         """Save the presentation.
 
         Args:
@@ -309,7 +306,7 @@ class Presentation:
     # === Class Methods ===
 
     @classmethod
-    def new(cls) -> "Presentation":
+    def new(cls) -> Presentation:
         """Create a new blank presentation."""
         pkg = create_blank_package()
 
@@ -362,6 +359,7 @@ class Presentation:
         # Add master reference to presentation part
         pres_part._element.find(".//p:sldMasterIdLst", namespaces={"p": "http://schemas.openxmlformats.org/presentationml/2006/main"})
         from lxml import etree
+
         from ..oxml.ns import qn
 
         master_lst = pres_part._element.find(qn("p:sldMasterIdLst"))
@@ -375,7 +373,7 @@ class Presentation:
         return cls(pkg)
 
     @classmethod
-    def open(cls, path: Union[str, Path, BinaryIO]) -> "Presentation":
+    def open(cls, path: str | Path | BinaryIO) -> Presentation:
         """Open an existing presentation.
 
         Args:
@@ -388,7 +386,7 @@ class Presentation:
         return cls(pkg)
 
     @classmethod
-    def from_template(cls, template_path: Union[str, Path]) -> "Presentation":
+    def from_template(cls, template_path: str | Path) -> Presentation:
         """Create a new presentation from a template.
 
         The template is opened and all slides are removed, leaving
@@ -409,12 +407,12 @@ class Presentation:
         return pres
 
 
-def _create_default_layouts() -> List[SlideLayoutPart]:
+def _create_default_layouts() -> list[SlideLayoutPart]:
     """Create default slide layouts."""
     from ..oxml.shapes import (
+        PlaceholderInfo,
         Position,
         Shape,
-        PlaceholderInfo,
         TextFrame,
     )
 

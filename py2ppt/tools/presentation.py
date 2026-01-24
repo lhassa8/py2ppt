@@ -6,13 +6,13 @@ Functions for creating, opening, and saving presentations.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO
 
 from ..core.presentation import Presentation
 
 
 def create_presentation(
-    template: Optional[Union[str, Path]] = None,
+    template: str | Path | None = None,
 ) -> Presentation:
     """Create a new presentation.
 
@@ -32,7 +32,7 @@ def create_presentation(
         return Presentation.from_template(template)
 
 
-def open_presentation(path: Union[str, Path, BinaryIO]) -> Presentation:
+def open_presentation(path: str | Path | BinaryIO) -> Presentation:
     """Open an existing presentation.
 
     Args:
@@ -49,7 +49,7 @@ def open_presentation(path: Union[str, Path, BinaryIO]) -> Presentation:
 
 def save_presentation(
     presentation: Presentation,
-    path: Union[str, Path, BinaryIO],
+    path: str | Path | BinaryIO,
 ) -> None:
     """Save a presentation to file.
 

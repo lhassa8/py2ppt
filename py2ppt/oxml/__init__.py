@@ -3,15 +3,15 @@
 This module provides low-level XML manipulation for .pptx files.
 """
 
+from .layout import SlideLayoutPart
+from .master import SlideMasterPart
 from .ns import nsmap, qn
 from .package import Package
 from .presentation import PresentationPart
+from .shapes import Shape, ShapeTree, TextFrame
 from .slide import SlidePart
-from .layout import SlideLayoutPart
-from .master import SlideMasterPart
-from .theme import ThemePart
-from .shapes import ShapeTree, Shape, TextFrame
 from .text import Paragraph, Run
+from .theme import ThemePart
 
 __all__ = [
     "nsmap",

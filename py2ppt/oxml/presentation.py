@@ -7,12 +7,11 @@ containing references to slides, masters, and presentation settings.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from lxml import etree
 
-from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
-from .package import Package, RelationshipCollection
+from .ns import CONTENT_TYPE, nsmap, qn
+from .package import Package
 
 
 @dataclass
@@ -43,7 +42,7 @@ class PresentationPart:
     def element(self) -> etree._Element:
         return self._element
 
-    def get_slide_refs(self) -> List[SlideRef]:
+    def get_slide_refs(self) -> list[SlideRef]:
         """Get all slide references in order."""
         refs = []
         sld_id_lst = self._element.find(qn("p:sldIdLst"))
@@ -56,7 +55,7 @@ class PresentationPart:
                     self._next_slide_id = slide_id + 1
         return refs
 
-    def get_master_refs(self) -> List[Tuple[str, int]]:
+    def get_master_refs(self) -> list[tuple[str, int]]:
         """Get slide master references as (rId, masterId) tuples."""
         refs = []
         master_id_lst = self._element.find(qn("p:sldMasterIdLst"))
@@ -67,7 +66,7 @@ class PresentationPart:
                 refs.append((r_id, m_id))
         return refs
 
-    def add_slide_ref(self, r_id: str, position: Optional[int] = None) -> int:
+    def add_slide_ref(self, r_id: str, position: int | None = None) -> int:
         """Add a slide reference and return its slide ID."""
         sld_id_lst = self._element.find(qn("p:sldIdLst"))
         if sld_id_lst is None:
@@ -110,7 +109,7 @@ class PresentationPart:
                 return True
         return False
 
-    def reorder_slides(self, r_id_order: List[str]) -> None:
+    def reorder_slides(self, r_id_order: list[str]) -> None:
         """Reorder slides according to the given relationship ID order."""
         sld_id_lst = self._element.find(qn("p:sldIdLst"))
         if sld_id_lst is None:
@@ -128,7 +127,7 @@ class PresentationPart:
             if r_id in elements:
                 sld_id_lst.append(elements[r_id])
 
-    def get_slide_size(self) -> Tuple[int, int]:
+    def get_slide_size(self) -> tuple[int, int]:
         """Get slide size in EMUs as (width, height)."""
         sld_sz = self._element.find(qn("p:sldSz"))
         if sld_sz is not None:
@@ -156,13 +155,13 @@ class PresentationPart:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "PresentationPart":
+    def from_xml(cls, xml_bytes: bytes) -> PresentationPart:
         """Parse from XML bytes."""
         element = etree.fromstring(xml_bytes)
         return cls(element)
 
     @classmethod
-    def new(cls) -> "PresentationPart":
+    def new(cls) -> PresentationPart:
         """Create a new blank presentation part."""
         nsmap_pres = {
             None: nsmap["p"],
@@ -202,7 +201,7 @@ def setup_presentation_part(pkg: Package, pres_part: PresentationPart) -> None:
     )
 
 
-def get_presentation_part(pkg: Package) -> Optional[PresentationPart]:
+def get_presentation_part(pkg: Package) -> PresentationPart | None:
     """Get presentation part from package."""
     content = pkg.get_part(PresentationPart.PART_NAME)
     if content is None:

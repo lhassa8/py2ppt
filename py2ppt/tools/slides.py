@@ -5,18 +5,14 @@ Functions for adding, deleting, and reordering slides.
 
 from __future__ import annotations
 
-from typing import List, Optional, Union
-
 from ..core.presentation import Presentation
-from ..core.slide import Slide
-from ..utils.errors import SlideNotFoundError
 
 
 def add_slide(
     presentation: Presentation,
-    layout: Union[str, int] = "Title and Content",
+    layout: str | int = "Title and Content",
     *,
-    position: Optional[int] = None,
+    position: int | None = None,
 ) -> int:
     """Add a new slide to the presentation.
 
@@ -85,7 +81,7 @@ def duplicate_slide(
 
 def reorder_slides(
     presentation: Presentation,
-    order: List[int],
+    order: list[int],
 ) -> None:
     """Reorder slides in the presentation.
 

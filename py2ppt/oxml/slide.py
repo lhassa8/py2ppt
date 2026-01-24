@@ -6,13 +6,11 @@ in ppt/slides/_rels/slideN.xml.rels
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from lxml import etree
 
 from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
 from .package import Package
-from .shapes import Shape, ShapeTree, Picture, Table, Position
+from .shapes import Picture, Shape, ShapeTree, Table
 
 
 class SlidePart:
@@ -26,7 +24,7 @@ class SlidePart:
 
     def __init__(self, element: etree._Element) -> None:
         self._element = element
-        self._shape_tree: Optional[ShapeTree] = None
+        self._shape_tree: ShapeTree | None = None
 
     @property
     def element(self) -> etree._Element:
@@ -44,12 +42,12 @@ class SlidePart:
         return self._shape_tree
 
     def get_placeholder(
-        self, ph_type: Optional[str] = None, ph_idx: Optional[int] = None
-    ) -> Optional[Shape]:
+        self, ph_type: str | None = None, ph_idx: int | None = None
+    ) -> Shape | None:
         """Find a placeholder by type and/or index."""
         return self.shape_tree.get_placeholder(ph_type, ph_idx)
 
-    def get_title_placeholder(self) -> Optional[Shape]:
+    def get_title_placeholder(self) -> Shape | None:
         """Get the title placeholder."""
         # Try various title types
         for ph_type in ["title", "ctrTitle"]:
@@ -58,7 +56,7 @@ class SlidePart:
                 return ph
         return None
 
-    def get_body_placeholder(self) -> Optional[Shape]:
+    def get_body_placeholder(self) -> Shape | None:
         """Get the body/content placeholder."""
         for ph_type in ["body", "obj"]:
             ph = self.get_placeholder(ph_type=ph_type)
@@ -66,7 +64,7 @@ class SlidePart:
                 return ph
         return None
 
-    def get_subtitle_placeholder(self) -> Optional[Shape]:
+    def get_subtitle_placeholder(self) -> Shape | None:
         """Get the subtitle placeholder."""
         return self.get_placeholder(ph_type="subTitle")
 
@@ -107,13 +105,13 @@ class SlidePart:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "SlidePart":
+    def from_xml(cls, xml_bytes: bytes) -> SlidePart:
         """Parse from XML bytes."""
         element = etree.fromstring(xml_bytes)
         return cls(element)
 
     @classmethod
-    def new(cls) -> "SlidePart":
+    def new(cls) -> SlidePart:
         """Create a new blank slide."""
         nsmap_slide = {
             None: nsmap["p"],
@@ -138,7 +136,7 @@ class SlidePart:
         return cls(root)
 
 
-def get_slide_part(pkg: Package, slide_number: int) -> Optional[SlidePart]:
+def get_slide_part(pkg: Package, slide_number: int) -> SlidePart | None:
     """Get a slide part by slide number (1-indexed).
 
     This uses the presentation.xml to find the actual slide path.
@@ -178,7 +176,7 @@ def add_slide_to_package(
     pkg: Package,
     slide_part: SlidePart,
     layout_r_id: str,
-    position: Optional[int] = None,
+    position: int | None = None,
 ) -> int:
     """Add a slide to the package.
 

@@ -7,7 +7,6 @@ PowerPoint uses EMUs (English Metric Units) internally.
 from __future__ import annotations
 
 import re
-from typing import Union
 
 # EMUs per inch
 EMU_PER_INCH = 914400
@@ -23,7 +22,7 @@ class EMU(int):
     914400 EMUs = 1 inch
     """
 
-    def __new__(cls, value: int) -> "EMU":
+    def __new__(cls, value: int) -> EMU:
         return super().__new__(cls, int(value))
 
     @property
@@ -118,7 +117,7 @@ _LENGTH_PATTERN = re.compile(
 )
 
 
-def parse_length(value: Union[str, int, float, EMU]) -> EMU:
+def parse_length(value: str | int | float | EMU) -> EMU:
     """Parse a length value to EMUs.
 
     Supports:

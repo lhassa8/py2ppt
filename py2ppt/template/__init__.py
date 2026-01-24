@@ -1,6 +1,6 @@
 """Template analysis and management."""
 
-from .analyzer import analyze_template, TemplateAnalysis
+from .analyzer import TemplateAnalysis, analyze_template
 from .matcher import LayoutMatcher, find_best_layout_match
 from .tokens import DesignTokens, create_tokens, load_tokens, save_tokens
 

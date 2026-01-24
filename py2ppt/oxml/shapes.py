@@ -12,11 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Union
 
 from lxml import etree
 
-from .ns import nsmap, qn
+from .ns import qn
 from .text import Paragraph, Run, RunProperties, TextBody
 
 
@@ -50,7 +49,7 @@ class Position:
     cx: int = 0  # Width
     cy: int = 0  # Height
 
-    def to_element(self) -> Tuple[etree._Element, etree._Element]:
+    def to_element(self) -> tuple[etree._Element, etree._Element]:
         """Create a:off and a:ext elements."""
         off = etree.Element(qn("a:off"))
         off.set("x", str(self.x))
@@ -64,8 +63,8 @@ class Position:
 
     @classmethod
     def from_elements(
-        cls, off: Optional[etree._Element], ext: Optional[etree._Element]
-    ) -> "Position":
+        cls, off: etree._Element | None, ext: etree._Element | None
+    ) -> Position:
         """Parse from a:off and a:ext elements."""
         pos = cls()
         if off is not None:
@@ -81,10 +80,10 @@ class Position:
 class PlaceholderInfo:
     """Placeholder information from nvSpPr/nvPr/ph."""
 
-    type: Optional[str] = None  # Placeholder type
-    idx: Optional[int] = None  # Placeholder index
-    sz: Optional[str] = None  # Size hint ("full", "half", "quarter")
-    orient: Optional[str] = None  # Orientation ("horz", "vert")
+    type: str | None = None  # Placeholder type
+    idx: int | None = None  # Placeholder index
+    sz: str | None = None  # Size hint ("full", "half", "quarter")
+    orient: str | None = None  # Orientation ("horz", "vert")
     has_custom_prompt: bool = False
 
     def to_element(self) -> etree._Element:
@@ -103,7 +102,7 @@ class PlaceholderInfo:
         return ph
 
     @classmethod
-    def from_element(cls, elem: Optional[etree._Element]) -> Optional["PlaceholderInfo"]:
+    def from_element(cls, elem: etree._Element | None) -> PlaceholderInfo | None:
         """Parse p:ph element."""
         if elem is None:
             return None
@@ -132,7 +131,7 @@ class TextFrame:
         self.body.text = value
 
     @property
-    def paragraphs(self) -> List[Paragraph]:
+    def paragraphs(self) -> list[Paragraph]:
         return self.body.paragraphs
 
     def clear(self) -> None:
@@ -143,9 +142,9 @@ class TextFrame:
         self,
         text: str = "",
         level: int = 0,
-        font_size: Optional[int] = None,
+        font_size: int | None = None,
         bold: bool = False,
-        color: Optional[str] = None,
+        color: str | None = None,
     ) -> Paragraph:
         """Add a paragraph with optional formatting."""
         props = RunProperties(
@@ -165,7 +164,7 @@ class TextFrame:
         return self.body.to_element()
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "TextFrame":
+    def from_element(cls, elem: etree._Element) -> TextFrame:
         return cls(body=TextBody.from_element(elem))
 
 
@@ -176,9 +175,9 @@ class Shape:
     id: int
     name: str
     position: Position = field(default_factory=Position)
-    placeholder: Optional[PlaceholderInfo] = None
-    text_frame: Optional[TextFrame] = None
-    preset_geometry: Optional[str] = None  # e.g., "rect", "ellipse"
+    placeholder: PlaceholderInfo | None = None
+    text_frame: TextFrame | None = None
+    preset_geometry: str | None = None  # e.g., "rect", "ellipse"
 
     def to_element(self) -> etree._Element:
         """Create p:sp element."""
@@ -224,7 +223,7 @@ class Shape:
         return sp
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "Shape":
+    def from_element(cls, elem: etree._Element) -> Shape:
         """Parse p:sp element."""
         # Get ID and name from cNvPr
         c_nv_pr = elem.find(f".//{qn('p:cNvPr')}")
@@ -270,7 +269,7 @@ class Picture:
     name: str
     position: Position = field(default_factory=Position)
     r_embed: str = ""  # Relationship ID to image part
-    placeholder: Optional[PlaceholderInfo] = None
+    placeholder: PlaceholderInfo | None = None
 
     def to_element(self) -> etree._Element:
         """Create p:pic element."""
@@ -309,7 +308,7 @@ class Picture:
         return pic
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "Picture":
+    def from_element(cls, elem: etree._Element) -> Picture:
         """Parse p:pic element."""
         c_nv_pr = elem.find(f".//{qn('p:cNvPr')}")
         pic_id = int(c_nv_pr.get("id", "0")) if c_nv_pr is not None else 0
@@ -378,9 +377,9 @@ class Table:
     id: int
     name: str
     position: Position = field(default_factory=Position)
-    rows: List[List[TableCell]] = field(default_factory=list)
-    col_widths: List[int] = field(default_factory=list)
-    row_heights: List[int] = field(default_factory=list)
+    rows: list[list[TableCell]] = field(default_factory=list)
+    col_widths: list[int] = field(default_factory=list)
+    row_heights: list[int] = field(default_factory=list)
 
     @property
     def num_rows(self) -> int:
@@ -441,7 +440,7 @@ class Table:
         return gf
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> Optional["Table"]:
+    def from_element(cls, elem: etree._Element) -> Table | None:
         """Parse p:graphicFrame element containing a table."""
         # Check if this is a table
         tbl = elem.find(f".//{qn('a:tbl')}")
@@ -495,21 +494,21 @@ class ShapeTree:
     """Collection of shapes on a slide (p:spTree)."""
 
     def __init__(self) -> None:
-        self._shapes: List[Union[Shape, Picture, Table]] = []
+        self._shapes: list[Shape | Picture | Table] = []
         self._next_id: int = 2  # ID 1 is typically used for spTree itself
 
     @property
-    def shapes(self) -> List[Union[Shape, Picture, Table]]:
+    def shapes(self) -> list[Shape | Picture | Table]:
         return self._shapes
 
-    def get_shape_by_id(self, shape_id: int) -> Optional[Union[Shape, Picture, Table]]:
+    def get_shape_by_id(self, shape_id: int) -> Shape | Picture | Table | None:
         """Find shape by ID."""
         for shape in self._shapes:
             if shape.id == shape_id:
                 return shape
         return None
 
-    def get_shape_by_name(self, name: str) -> Optional[Union[Shape, Picture, Table]]:
+    def get_shape_by_name(self, name: str) -> Shape | Picture | Table | None:
         """Find shape by name."""
         for shape in self._shapes:
             if shape.name == name:
@@ -517,8 +516,8 @@ class ShapeTree:
         return None
 
     def get_placeholder(
-        self, ph_type: Optional[str] = None, ph_idx: Optional[int] = None
-    ) -> Optional[Shape]:
+        self, ph_type: str | None = None, ph_idx: int | None = None
+    ) -> Shape | None:
         """Find a placeholder shape by type and/or index."""
         for shape in self._shapes:
             if isinstance(shape, Shape) and shape.placeholder:
@@ -529,13 +528,13 @@ class ShapeTree:
                 return shape
         return None
 
-    def get_placeholders(self) -> List[Shape]:
+    def get_placeholders(self) -> list[Shape]:
         """Get all placeholder shapes."""
         return [
             s for s in self._shapes if isinstance(s, Shape) and s.placeholder is not None
         ]
 
-    def add_shape(self, shape: Union[Shape, Picture, Table]) -> None:
+    def add_shape(self, shape: Shape | Picture | Table) -> None:
         """Add a shape to the tree."""
         if shape.id == 0:
             shape.id = self._next_id
@@ -544,7 +543,7 @@ class ShapeTree:
             self._next_id = shape.id + 1
         self._shapes.append(shape)
 
-    def remove_shape(self, shape: Union[Shape, Picture, Table]) -> bool:
+    def remove_shape(self, shape: Shape | Picture | Table) -> bool:
         """Remove a shape from the tree."""
         if shape in self._shapes:
             self._shapes.remove(shape)
@@ -586,7 +585,7 @@ class ShapeTree:
         return sp_tree
 
     @classmethod
-    def from_element(cls, elem: etree._Element) -> "ShapeTree":
+    def from_element(cls, elem: etree._Element) -> ShapeTree:
         """Parse p:spTree element."""
         tree = cls()
 
@@ -612,7 +611,7 @@ class ShapeTree:
 def create_title_shape(
     shape_id: int,
     text: str = "",
-    position: Optional[Position] = None,
+    position: Position | None = None,
 ) -> Shape:
     """Create a title placeholder shape."""
     if position is None:
@@ -635,9 +634,9 @@ def create_title_shape(
 
 def create_body_shape(
     shape_id: int,
-    items: Optional[List[str]] = None,
-    levels: Optional[List[int]] = None,
-    position: Optional[Position] = None,
+    items: list[str] | None = None,
+    levels: list[int] | None = None,
+    position: Position | None = None,
 ) -> Shape:
     """Create a body/content placeholder shape."""
     if position is None:
@@ -649,7 +648,7 @@ def create_body_shape(
     if items:
         if levels is None:
             levels = [0] * len(items)
-        for item, level in zip(items, levels):
+        for item, level in zip(items, levels, strict=False):
             tf.add_paragraph(item, level=level)
 
     return Shape(
@@ -665,7 +664,7 @@ def create_body_shape(
 def create_subtitle_shape(
     shape_id: int,
     text: str = "",
-    position: Optional[Position] = None,
+    position: Position | None = None,
 ) -> Shape:
     """Create a subtitle placeholder shape."""
     if position is None:
@@ -690,10 +689,10 @@ def create_text_box(
     shape_id: int,
     text: str,
     position: Position,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> Shape:
     """Create a text box shape (non-placeholder)."""
     tf = TextFrame()

@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
-from ..oxml.slide import SlidePart, update_slide_in_package
 from ..oxml.shapes import (
-    Shape,
     Picture,
+    Position,
+    Shape,
     Table,
     TableCell,
-    Position,
-    PlaceholderInfo,
     TextFrame,
 )
-from ..oxml.text import Paragraph, Run, RunProperties, ParagraphProperties
-from ..oxml.ns import CONTENT_TYPE
+from ..oxml.slide import SlidePart, update_slide_in_package
+from ..utils.colors import is_theme_color, parse_color
 from ..utils.errors import PlaceholderNotFoundError
-from ..utils.colors import parse_color, is_theme_color, get_theme_color_name
-from ..utils.units import parse_length, EMU
+from ..utils.units import parse_length
 
 if TYPE_CHECKING:
     from .presentation import Presentation
@@ -34,7 +31,7 @@ class Slide:
         self,
         slide_part: SlidePart,
         slide_number: int,
-        presentation: "Presentation",
+        presentation: Presentation,
     ) -> None:
         self._part = slide_part
         self._number = slide_number
@@ -46,11 +43,11 @@ class Slide:
         return self._number
 
     @property
-    def shapes(self) -> List[Union[Shape, Picture, Table]]:
+    def shapes(self) -> list[Shape | Picture | Table]:
         """Get all shapes on the slide."""
         return self._part.shape_tree.shapes
 
-    def get_placeholder_types(self) -> List[str]:
+    def get_placeholder_types(self) -> list[str]:
         """Get list of placeholder types on this slide."""
         types = []
         for shape in self._part.shape_tree.get_placeholders():
@@ -60,7 +57,7 @@ class Slide:
                     types.append(ph_type)
         return types
 
-    def get_placeholders(self) -> Dict[str, Shape]:
+    def get_placeholders(self) -> dict[str, Shape]:
         """Get all placeholders as a dict of type -> shape."""
         placeholders = {}
         for shape in self._part.shape_tree.get_placeholders():
@@ -125,7 +122,7 @@ class Slide:
 
         return shape
 
-    def get_title(self) -> Optional[str]:
+    def get_title(self) -> str | None:
         """Get the title text."""
         shape = self._part.get_title_placeholder()
         if shape and shape.text_frame:
@@ -136,10 +133,10 @@ class Slide:
         self,
         text: str,
         *,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
         bold: bool = False,
-        color: Optional[str] = None,
+        color: str | None = None,
     ) -> None:
         """Set the title text.
 
@@ -157,7 +154,7 @@ class Slide:
         self._set_text_content(shape, text, font_size, font_family, bold, color)
         self._save()
 
-    def get_subtitle(self) -> Optional[str]:
+    def get_subtitle(self) -> str | None:
         """Get the subtitle text."""
         shape = self._part.get_subtitle_placeholder()
         if shape and shape.text_frame:
@@ -168,10 +165,10 @@ class Slide:
         self,
         text: str,
         *,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
         bold: bool = False,
-        color: Optional[str] = None,
+        color: str | None = None,
     ) -> None:
         """Set the subtitle text.
 
@@ -189,7 +186,7 @@ class Slide:
         self._set_text_content(shape, text, font_size, font_family, bold, color)
         self._save()
 
-    def get_body(self) -> List[str]:
+    def get_body(self) -> list[str]:
         """Get body content as list of bullet points."""
         shape = self._part.get_body_placeholder()
         if shape is None or shape.text_frame is None:
@@ -199,12 +196,12 @@ class Slide:
 
     def set_body(
         self,
-        content: Union[str, List[str]],
+        content: str | list[str],
         *,
-        levels: Optional[List[int]] = None,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
-        color: Optional[str] = None,
+        levels: list[int] | None = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
+        color: str | None = None,
     ) -> None:
         """Set body content.
 
@@ -233,9 +230,9 @@ class Slide:
         text: str,
         *,
         level: int = 0,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
-        color: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
+        color: str | None = None,
     ) -> None:
         """Add a bullet point to the body.
 
@@ -273,10 +270,10 @@ class Slide:
         placeholder: str,
         text: str,
         *,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
         bold: bool = False,
-        color: Optional[str] = None,
+        color: str | None = None,
     ) -> None:
         """Set text in a specific placeholder.
 
@@ -295,15 +292,15 @@ class Slide:
     def add_text_box(
         self,
         text: str,
-        left: Union[str, int],
-        top: Union[str, int],
-        width: Union[str, int],
-        height: Union[str, int],
+        left: str | int,
+        top: str | int,
+        width: str | int,
+        height: str | int,
         *,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
         bold: bool = False,
-        color: Optional[str] = None,
+        color: str | None = None,
     ) -> Shape:
         """Add a text box at a specific position.
 
@@ -353,13 +350,13 @@ class Slide:
 
     def add_table(
         self,
-        data: List[List[Any]],
-        left: Optional[Union[str, int]] = None,
-        top: Optional[Union[str, int]] = None,
-        width: Optional[Union[str, int]] = None,
-        height: Optional[Union[str, int]] = None,
+        data: list[list[Any]],
+        left: str | int | None = None,
+        top: str | int | None = None,
+        width: str | int | None = None,
+        height: str | int | None = None,
         *,
-        placeholder: Optional[str] = None,
+        placeholder: str | None = None,
     ) -> Table:
         """Add a table to the slide.
 
@@ -430,7 +427,7 @@ class Slide:
 
         return table
 
-    def describe(self) -> Dict[str, Any]:
+    def describe(self) -> dict[str, Any]:
         """Get a description of the slide content.
 
         Returns:
@@ -477,10 +474,10 @@ class Slide:
         self,
         shape: Shape,
         text: str,
-        font_size: Optional[int],
-        font_family: Optional[str],
+        font_size: int | None,
+        font_family: str | None,
         bold: bool,
-        color: Optional[str],
+        color: str | None,
     ) -> None:
         """Set text content in a shape."""
         if shape.text_frame is None:
@@ -505,11 +502,11 @@ class Slide:
     def _set_bullet_content(
         self,
         shape: Shape,
-        items: List[str],
-        levels: List[int],
-        font_size: Optional[int],
-        font_family: Optional[str],
-        color: Optional[str],
+        items: list[str],
+        levels: list[int],
+        font_size: int | None,
+        font_family: str | None,
+        color: str | None,
     ) -> None:
         """Set bullet content in a shape."""
         if shape.text_frame is None:
@@ -524,7 +521,7 @@ class Slide:
             if not is_theme_color(parsed):
                 color_val = parsed
 
-        for item, level in zip(items, levels):
+        for item, level in zip(items, levels, strict=False):
             shape.text_frame.add_paragraph(
                 item,
                 level=level,

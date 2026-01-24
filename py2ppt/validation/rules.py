@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 
 @dataclass
@@ -15,30 +15,30 @@ class StyleGuide:
     """
 
     # Content limits
-    max_slides: Optional[int] = None
-    max_bullet_points: Optional[int] = None  # Per slide
-    max_words_per_bullet: Optional[int] = None
-    max_title_length: Optional[int] = None  # Characters
+    max_slides: int | None = None
+    max_bullet_points: int | None = None  # Per slide
+    max_words_per_bullet: int | None = None
+    max_title_length: int | None = None  # Characters
 
     # Required elements
-    required_layouts: List[str] = field(default_factory=list)
-    required_first_slide: Optional[str] = None  # Layout name
+    required_layouts: list[str] = field(default_factory=list)
+    required_first_slide: str | None = None  # Layout name
 
     # Typography
-    allowed_fonts: Optional[Set[str]] = None
-    forbidden_fonts: Set[str] = field(default_factory=set)
-    min_font_size: Optional[int] = None  # Points
-    max_font_size: Optional[int] = None
+    allowed_fonts: set[str] | None = None
+    forbidden_fonts: set[str] = field(default_factory=set)
+    min_font_size: int | None = None  # Points
+    max_font_size: int | None = None
 
     # Colors
-    allowed_colors: Optional[Set[str]] = None  # Hex or token names
-    forbidden_colors: Set[str] = field(default_factory=set)
+    allowed_colors: set[str] | None = None  # Hex or token names
+    forbidden_colors: set[str] = field(default_factory=set)
 
     # Custom rules
-    custom_rules: Dict[str, Any] = field(default_factory=dict)
+    custom_rules: dict[str, Any] = field(default_factory=dict)
 
 
-def create_style_guide(spec: Dict[str, Any]) -> StyleGuide:
+def create_style_guide(spec: dict[str, Any]) -> StyleGuide:
     """Create a style guide from a specification dict.
 
     Args:

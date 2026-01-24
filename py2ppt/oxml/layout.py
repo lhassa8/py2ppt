@@ -7,13 +7,12 @@ stored in ppt/slideLayouts/slideLayoutN.xml.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from lxml import etree
 
-from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
+from .ns import REL_TYPE, nsmap, qn
 from .package import Package
-from .shapes import PlaceholderInfo, Position, Shape, ShapeTree
+from .shapes import Position, ShapeTree
 
 
 @dataclass
@@ -21,7 +20,7 @@ class LayoutPlaceholder:
     """Information about a placeholder in a layout."""
 
     type: str  # Placeholder type (title, body, etc.)
-    idx: Optional[int]  # Placeholder index
+    idx: int | None  # Placeholder index
     name: str  # Shape name
     position: Position  # Position and size
 
@@ -32,7 +31,7 @@ class LayoutInfo:
 
     name: str
     index: int  # Index in the layouts list
-    placeholders: List[LayoutPlaceholder] = field(default_factory=list)
+    placeholders: list[LayoutPlaceholder] = field(default_factory=list)
     master_r_id: str = ""  # Relationship to slide master
 
 
@@ -47,7 +46,7 @@ class SlideLayoutPart:
 
     def __init__(self, element: etree._Element) -> None:
         self._element = element
-        self._shape_tree: Optional[ShapeTree] = None
+        self._shape_tree: ShapeTree | None = None
 
     @property
     def element(self) -> etree._Element:
@@ -71,11 +70,11 @@ class SlideLayoutPart:
             return c_sld.get("name", "")
         return ""
 
-    def get_type(self) -> Optional[str]:
+    def get_type(self) -> str | None:
         """Get the layout type if present."""
         return self._element.get("type")
 
-    def get_placeholders(self) -> List[LayoutPlaceholder]:
+    def get_placeholders(self) -> list[LayoutPlaceholder]:
         """Get all placeholder information from this layout."""
         placeholders = []
 
@@ -94,7 +93,7 @@ class SlideLayoutPart:
 
     def get_placeholder_by_type(
         self, ph_type: str
-    ) -> Optional[LayoutPlaceholder]:
+    ) -> LayoutPlaceholder | None:
         """Get a placeholder by type."""
         for ph in self.get_placeholders():
             if ph.type == ph_type:
@@ -126,13 +125,13 @@ class SlideLayoutPart:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "SlideLayoutPart":
+    def from_xml(cls, xml_bytes: bytes) -> SlideLayoutPart:
         """Parse from XML bytes."""
         element = etree.fromstring(xml_bytes)
         return cls(element)
 
     @classmethod
-    def new(cls, name: str = "Custom Layout") -> "SlideLayoutPart":
+    def new(cls, name: str = "Custom Layout") -> SlideLayoutPart:
         """Create a new blank layout."""
         nsmap_layout = {
             None: nsmap["p"],
@@ -157,7 +156,7 @@ class SlideLayoutPart:
         return cls(root)
 
 
-def get_layout_parts(pkg: Package) -> Dict[str, SlideLayoutPart]:
+def get_layout_parts(pkg: Package) -> dict[str, SlideLayoutPart]:
     """Get all slide layout parts from the package.
 
     Returns:
@@ -166,9 +165,8 @@ def get_layout_parts(pkg: Package) -> Dict[str, SlideLayoutPart]:
     layouts = {}
 
     for part_name, content in pkg.iter_parts():
-        if part_name.startswith("ppt/slideLayouts/") and part_name.endswith(".xml"):
-            if "/_rels/" not in part_name:
-                layouts[part_name] = SlideLayoutPart.from_xml(content)
+        if part_name.startswith("ppt/slideLayouts/") and part_name.endswith(".xml") and "/_rels/" not in part_name:
+            layouts[part_name] = SlideLayoutPart.from_xml(content)
 
     return layouts
 
@@ -180,7 +178,7 @@ def _extract_layout_num(path: str) -> int:
     return int(num_str) if num_str.isdigit() else 0
 
 
-def get_layout_info_list(pkg: Package) -> List[LayoutInfo]:
+def get_layout_info_list(pkg: Package) -> list[LayoutInfo]:
     """Get information about all layouts in the package.
 
     Returns:
@@ -215,7 +213,7 @@ def get_layout_info_list(pkg: Package) -> List[LayoutInfo]:
 
 def get_layout_by_name(
     pkg: Package, name: str, fuzzy: bool = True
-) -> Optional[Tuple[SlideLayoutPart, int]]:
+) -> tuple[SlideLayoutPart, int] | None:
     """Find a layout by name.
 
     Args:
@@ -250,7 +248,7 @@ def get_layout_by_name(
     return None
 
 
-def get_layout_by_index(pkg: Package, index: int) -> Optional[SlideLayoutPart]:
+def get_layout_by_index(pkg: Package, index: int) -> SlideLayoutPart | None:
     """Get a layout by index (0-indexed).
 
     Args:
@@ -294,7 +292,7 @@ def normalize_layout_name(name: str) -> str:
     return name.lower().replace("_", " ").replace("-", " ").strip()
 
 
-def guess_layout_type(layout_name: str) -> List[str]:
+def guess_layout_type(layout_name: str) -> list[str]:
     """Guess placeholder types for a layout name.
 
     Returns list of expected placeholder types.

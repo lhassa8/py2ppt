@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, Tuple, Union
 
 # Named colors (subset of CSS colors)
 NAMED_COLORS = {
@@ -91,7 +90,7 @@ def is_valid_hex_color(color: str) -> bool:
     return HEX_PATTERN.match(color) is not None
 
 
-def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
+def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple.
 
     Args:
@@ -130,7 +129,7 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
     return f"{r:02X}{g:02X}{b:02X}"
 
 
-def parse_color(color: Union[str, Tuple[int, int, int]]) -> str:
+def parse_color(color: str | tuple[int, int, int]) -> str:
     """Parse a color value to a hex string (without #).
 
     Supports:
@@ -209,7 +208,7 @@ def is_theme_color(color: str) -> bool:
     return color.startswith("scheme:")
 
 
-def get_theme_color_name(color: str) -> Optional[str]:
+def get_theme_color_name(color: str) -> str | None:
     """Get the theme color name from a parsed color.
 
     Args:

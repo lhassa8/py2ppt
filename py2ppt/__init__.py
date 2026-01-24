@@ -39,8 +39,34 @@ __version__ = "0.1.0"
 from .core.presentation import Presentation
 from .core.slide import Slide
 
-# === Tool Functions (Main API) ===
+# Content tools
+from .tools.content import (
+    add_bullet,
+    add_text_box,
+    set_body,
+    set_placeholder_text,
+    set_subtitle,
+    set_title,
+)
 
+# Inspection tools
+from .tools.inspection import (
+    describe_slide,
+    get_placeholders,
+    get_slide_count,
+    get_theme_colors,
+    get_theme_fonts,
+    list_layouts,
+)
+
+# Media tools
+from .tools.media import (
+    add_image,
+    add_table,
+    update_table_cell,
+)
+
+# === Tool Functions (Main API) ===
 # Presentation tools
 from .tools.presentation import (
     create_presentation,
@@ -56,59 +82,31 @@ from .tools.slides import (
     reorder_slides,
 )
 
-# Content tools
-from .tools.content import (
-    set_title,
-    set_subtitle,
-    set_body,
-    add_bullet,
-    set_placeholder_text,
-    add_text_box,
-)
-
-# Media tools
-from .tools.media import (
-    add_table,
-    update_table_cell,
-    add_image,
-)
-
-# Inspection tools
-from .tools.inspection import (
-    list_layouts,
-    describe_slide,
-    get_placeholders,
-    get_theme_colors,
-    get_theme_fonts,
-    get_slide_count,
-)
-
 # Style tools
 from .tools.style import (
     set_text_style,
 )
-
-# === Utilities ===
-from .utils.units import (
-    Inches,
-    Cm,
-    Mm,
-    Pt,
-    Emu,
-    parse_length,
-)
-
 from .utils.colors import (
     parse_color,
 )
 
 # === Errors ===
 from .utils.errors import (
-    Py2PptError,
-    LayoutNotFoundError,
-    SlideNotFoundError,
-    PlaceholderNotFoundError,
     InvalidTemplateError,
+    LayoutNotFoundError,
+    PlaceholderNotFoundError,
+    Py2PptError,
+    SlideNotFoundError,
+)
+
+# === Utilities ===
+from .utils.units import (
+    Cm,
+    Emu,
+    Inches,
+    Mm,
+    Pt,
+    parse_length,
 )
 
 __all__ = [

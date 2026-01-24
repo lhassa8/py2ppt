@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-
 
 # Placeholder type aliases - maps common names to PowerPoint placeholder types
-PLACEHOLDER_ALIASES: Dict[str, List[str]] = {
+PLACEHOLDER_ALIASES: dict[str, list[str]] = {
     # Title variations
     "title": ["title", "ctrTitle"],
     "centered_title": ["ctrTitle"],
@@ -39,7 +37,7 @@ PLACEHOLDER_ALIASES: Dict[str, List[str]] = {
 }
 
 # Reverse mapping: PowerPoint type -> friendly name
-PLACEHOLDER_FRIENDLY_NAMES: Dict[str, str] = {
+PLACEHOLDER_FRIENDLY_NAMES: dict[str, str] = {
     "title": "title",
     "ctrTitle": "centered_title",
     "subTitle": "subtitle",
@@ -78,7 +76,7 @@ def normalize_placeholder_name(name: str) -> str:
     return name
 
 
-def get_placeholder_candidates(name: str) -> List[str]:
+def get_placeholder_candidates(name: str) -> list[str]:
     """Get list of PowerPoint placeholder types for a given name.
 
     Returns multiple candidates for fuzzy matching.
@@ -111,9 +109,9 @@ class PlaceholderMatch:
     """Result of a placeholder match operation."""
 
     found: bool
-    placeholder_type: Optional[str] = None
-    placeholder_idx: Optional[int] = None
-    friendly_name: Optional[str] = None
+    placeholder_type: str | None = None
+    placeholder_idx: int | None = None
+    friendly_name: str | None = None
 
 
 class PlaceholderMap:
@@ -127,9 +125,9 @@ class PlaceholderMap:
     """
 
     def __init__(self) -> None:
-        self._by_type: Dict[str, List[Tuple[str, int | None]]] = {}
+        self._by_type: dict[str, list[tuple[str, int | None]]] = {}
 
-    def add(self, ph_type: str, idx: Optional[int] = None) -> None:
+    def add(self, ph_type: str, idx: int | None = None) -> None:
         """Register a placeholder.
 
         Args:
@@ -190,7 +188,7 @@ class PlaceholderMap:
 
         return PlaceholderMatch(found=False)
 
-    def list_all(self) -> List[str]:
+    def list_all(self) -> list[str]:
         """List all registered placeholders with friendly names."""
         result = []
         for ph_type, entries in self._by_type.items():
@@ -206,7 +204,7 @@ class PlaceholderMap:
         return result
 
     @classmethod
-    def from_shape_tree(cls, shape_tree) -> "PlaceholderMap":
+    def from_shape_tree(cls, shape_tree) -> PlaceholderMap:
         """Create a PlaceholderMap from a shape tree.
 
         Args:

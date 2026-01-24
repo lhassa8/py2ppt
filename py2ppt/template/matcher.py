@@ -7,11 +7,9 @@ and actual layout names in templates.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-
 
 # Common layout name patterns and their canonical forms
-LAYOUT_PATTERNS: Dict[str, List[str]] = {
+LAYOUT_PATTERNS: dict[str, list[str]] = {
     "title slide": [
         "title slide", "title_slide", "titleslide",
         "title page", "title_page", "cover", "cover slide",
@@ -73,7 +71,7 @@ def normalize_name(name: str) -> str:
     return name
 
 
-def find_canonical_layout(name: str) -> Optional[str]:
+def find_canonical_layout(name: str) -> str | None:
     """Find the canonical layout name for a given input.
 
     Args:
@@ -105,10 +103,10 @@ class LayoutMatch:
     """Result of a layout matching operation."""
 
     found: bool
-    layout_name: Optional[str] = None
-    layout_index: Optional[int] = None
+    layout_name: str | None = None
+    layout_index: int | None = None
     confidence: float = 0.0
-    alternatives: List[str] = None
+    alternatives: list[str] = None
 
     def __post_init__(self):
         if self.alternatives is None:
@@ -118,7 +116,7 @@ class LayoutMatch:
 class LayoutMatcher:
     """Matches user-provided layout names to actual layouts in a presentation."""
 
-    def __init__(self, layout_names: List[str]) -> None:
+    def __init__(self, layout_names: list[str]) -> None:
         """Initialize with available layout names.
 
         Args:
@@ -155,7 +153,7 @@ class LayoutMatcher:
         canonical = find_canonical_layout(query)
         if canonical:
             # Find a layout matching this canonical name
-            for norm_name, (name, idx) in self._normalized.items():
+            for _norm_name, (name, idx) in self._normalized.items():
                 if find_canonical_layout(name) == canonical:
                     return LayoutMatch(
                         found=True,
@@ -209,8 +207,8 @@ class LayoutMatcher:
 
 def find_best_layout_match(
     query: str,
-    layout_names: List[str],
-) -> Tuple[Optional[str], Optional[int], float]:
+    layout_names: list[str],
+) -> tuple[str | None, int | None, float]:
     """Find the best matching layout name.
 
     Args:

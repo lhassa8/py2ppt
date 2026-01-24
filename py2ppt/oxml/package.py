@@ -7,12 +7,11 @@ This module handles reading/writing the package structure.
 from __future__ import annotations
 
 import io
-import os
 import zipfile
-from dataclasses import dataclass, field
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Dict, Iterator, List, Optional, Union
-from xml.etree import ElementTree as ET
+from typing import BinaryIO
 
 from lxml import etree
 
@@ -65,7 +64,7 @@ class RelationshipCollection:
     """Manages relationships for a package part."""
 
     def __init__(self) -> None:
-        self._rels: Dict[str, Relationship] = {}
+        self._rels: dict[str, Relationship] = {}
         self._next_id: int = 1
 
     def __iter__(self) -> Iterator[Relationship]:
@@ -74,11 +73,11 @@ class RelationshipCollection:
     def __len__(self) -> int:
         return len(self._rels)
 
-    def get(self, r_id: str) -> Optional[Relationship]:
+    def get(self, r_id: str) -> Relationship | None:
         """Get relationship by ID."""
         return self._rels.get(r_id)
 
-    def find_by_type(self, rel_type: str) -> List[Relationship]:
+    def find_by_type(self, rel_type: str) -> list[Relationship]:
         """Find all relationships of a given type."""
         return [r for r in self._rels.values() if r.rel_type == rel_type]
 
@@ -86,7 +85,7 @@ class RelationshipCollection:
         self,
         rel_type: str,
         target: str,
-        r_id: Optional[str] = None,
+        r_id: str | None = None,
         target_mode: str = "Internal",
     ) -> str:
         """Add a relationship and return its ID."""
@@ -143,7 +142,7 @@ class RelationshipCollection:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "RelationshipCollection":
+    def from_xml(cls, xml_bytes: bytes) -> RelationshipCollection:
         """Parse relationships from XML."""
         coll = cls()
         root = etree.fromstring(xml_bytes)
@@ -168,11 +167,11 @@ class ContentTypes:
     """Manages [Content_Types].xml."""
 
     def __init__(self) -> None:
-        self.defaults: Dict[str, str] = {
+        self.defaults: dict[str, str] = {
             "rels": CONTENT_TYPE.RELS,
             "xml": CONTENT_TYPE.XML,
         }
-        self.overrides: Dict[str, str] = {}
+        self.overrides: dict[str, str] = {}
 
     def add_default(self, extension: str, content_type: str) -> None:
         """Add a default content type for an extension."""
@@ -191,7 +190,7 @@ class ContentTypes:
         if part_name in self.overrides:
             del self.overrides[part_name]
 
-    def get_content_type(self, part_name: str) -> Optional[str]:
+    def get_content_type(self, part_name: str) -> str | None:
         """Get content type for a part."""
         if not part_name.startswith("/"):
             part_name = "/" + part_name
@@ -231,7 +230,7 @@ class ContentTypes:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "ContentTypes":
+    def from_xml(cls, xml_bytes: bytes) -> ContentTypes:
         """Parse from XML."""
         ct = cls()
         ct.defaults.clear()
@@ -266,10 +265,10 @@ class Package:
     def __init__(self) -> None:
         self.content_types = ContentTypes()
         self.package_rels = RelationshipCollection()
-        self._parts: Dict[str, bytes] = {}
-        self._part_rels: Dict[str, RelationshipCollection] = {}
+        self._parts: dict[str, bytes] = {}
+        self._part_rels: dict[str, RelationshipCollection] = {}
 
-    def get_part(self, part_name: str) -> Optional[bytes]:
+    def get_part(self, part_name: str) -> bytes | None:
         """Get raw bytes for a part."""
         part_name = part_name.lstrip("/")
         return self._parts.get(part_name)
@@ -278,7 +277,7 @@ class Package:
         self,
         part_name: str,
         content: bytes,
-        content_type: Optional[str] = None,
+        content_type: str | None = None,
     ) -> None:
         """Set content for a part."""
         part_name = part_name.lstrip("/")
@@ -334,11 +333,10 @@ class Package:
 
     def iter_parts(self) -> Iterator[tuple[str, bytes]]:
         """Iterate over all parts."""
-        for name, content in self._parts.items():
-            yield name, content
+        yield from self._parts.items()
 
     @classmethod
-    def open(cls, path_or_file: Union[str, Path, BinaryIO]) -> "Package":
+    def open(cls, path_or_file: str | Path | BinaryIO) -> Package:
         """Open a package from file or file-like object."""
         pkg = cls()
 
@@ -376,7 +374,7 @@ class Package:
 
         return pkg
 
-    def save(self, path_or_file: Union[str, Path, BinaryIO]) -> None:
+    def save(self, path_or_file: str | Path | BinaryIO) -> None:
         """Save package to file or file-like object."""
         if isinstance(path_or_file, (str, Path)):
             zf = zipfile.ZipFile(
@@ -410,9 +408,8 @@ class Package:
             # Write parts
             for name, content in self._parts.items():
                 # Skip rels files (handled above)
-                if "/_rels/" in name or name.startswith("_rels/"):
-                    if name.endswith(".rels"):
-                        continue
+                if ("/_rels/" in name or name.startswith("_rels/")) and name.endswith(".rels"):
+                    continue
                 zf.writestr(name, content)
 
         finally:
@@ -426,7 +423,7 @@ class Package:
         return buf.getvalue()
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "Package":
+    def from_bytes(cls, data: bytes) -> Package:
         """Load package from bytes."""
         return cls.open(io.BytesIO(data))
 

@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
-from ..utils.colors import parse_color, is_valid_hex_color
+from ..utils.colors import parse_color
 
 
 @dataclass
@@ -19,8 +19,8 @@ class FontToken:
     """Font token specification."""
 
     family: str
-    size: Optional[str] = None  # e.g., "32pt"
-    weight: Optional[str] = None  # "normal", "bold"
+    size: str | None = None  # e.g., "32pt"
+    weight: str | None = None  # "normal", "bold"
 
 
 @dataclass
@@ -31,12 +31,12 @@ class DesignTokens:
     presentations to ensure brand consistency.
     """
 
-    colors: Dict[str, str] = field(default_factory=dict)  # name -> hex
-    fonts: Dict[str, FontToken] = field(default_factory=dict)  # name -> FontToken
-    spacing: Dict[str, str] = field(default_factory=dict)  # name -> measurement
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    colors: dict[str, str] = field(default_factory=dict)  # name -> hex
+    fonts: dict[str, FontToken] = field(default_factory=dict)  # name -> FontToken
+    spacing: dict[str, str] = field(default_factory=dict)  # name -> measurement
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def get_color(self, name: str) -> Optional[str]:
+    def get_color(self, name: str) -> str | None:
         """Get a color by token name.
 
         Args:
@@ -47,7 +47,7 @@ class DesignTokens:
         """
         return self.colors.get(name)
 
-    def get_font(self, name: str) -> Optional[FontToken]:
+    def get_font(self, name: str) -> FontToken | None:
         """Get a font by token name.
 
         Args:
@@ -77,7 +77,7 @@ class DesignTokens:
         # Try to parse as a direct color value
         return "#" + parse_color(color)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "colors": self.colors,
@@ -94,7 +94,7 @@ class DesignTokens:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DesignTokens":
+    def from_dict(cls, data: dict[str, Any]) -> DesignTokens:
         """Create from dictionary."""
         tokens = cls()
 
@@ -121,7 +121,7 @@ class DesignTokens:
         return tokens
 
 
-def create_tokens(spec: Dict[str, Any]) -> DesignTokens:
+def create_tokens(spec: dict[str, Any]) -> DesignTokens:
     """Create design tokens from a specification dict.
 
     Args:
@@ -155,7 +155,7 @@ def create_tokens(spec: Dict[str, Any]) -> DesignTokens:
 
 def save_tokens(
     tokens: DesignTokens,
-    path: Union[str, Path],
+    path: str | Path,
 ) -> None:
     """Save design tokens to a JSON file.
 
@@ -171,7 +171,7 @@ def save_tokens(
         json.dump(tokens.to_dict(), f, indent=2)
 
 
-def load_tokens(path: Union[str, Path]) -> DesignTokens:
+def load_tokens(path: str | Path) -> DesignTokens:
     """Load design tokens from a JSON file.
 
     Args:

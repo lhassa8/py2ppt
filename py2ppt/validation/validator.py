@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
 
 from ..core.presentation import Presentation
 from ..oxml.shapes import Shape
@@ -23,17 +22,17 @@ class Severity(Enum):
 class ValidationIssue:
     """A single validation issue found in the presentation."""
 
-    slide: Optional[int]  # Slide number, or None for presentation-level
+    slide: int | None  # Slide number, or None for presentation-level
     severity: str  # "error", "warning", "info"
     rule: str  # Rule identifier
     message: str  # Human-readable message
-    details: Optional[dict] = None
+    details: dict | None = None
 
 
 def validate(
     presentation: Presentation,
     style_guide: StyleGuide,
-) -> List[ValidationIssue]:
+) -> list[ValidationIssue]:
     """Validate a presentation against a style guide.
 
     Args:
@@ -48,12 +47,11 @@ def validate(
         >>> for issue in issues:
         ...     print(f"Slide {issue.slide}: {issue.message}")
     """
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
 
     # Check slide count
-    if style_guide.max_slides:
-        if presentation.slide_count > style_guide.max_slides:
-            issues.append(
+    if style_guide.max_slides and presentation.slide_count > style_guide.max_slides:
+        issues.append(
                 ValidationIssue(
                     slide=None,
                     severity="error",
@@ -68,12 +66,12 @@ def validate(
 
     # Check required layouts
     if style_guide.required_layouts:
-        layout_names = {l.lower() for l in presentation.get_layout_names()}
+        layout_names = {name.lower() for name in presentation.get_layout_names()}
         for required in style_guide.required_layouts:
             if required.lower() not in layout_names:
                 # Check if any slide uses a layout matching this name
                 found = False
-                for i in range(1, presentation.slide_count + 1):
+                for _i in range(1, presentation.slide_count + 1):
                     # TODO: Check slide layout
                     pass
 
@@ -100,7 +98,7 @@ def _validate_slide(
     slide,
     slide_num: int,
     guide: StyleGuide,
-) -> List[ValidationIssue]:
+) -> list[ValidationIssue]:
     """Validate a single slide."""
     issues = []
 
@@ -108,9 +106,8 @@ def _validate_slide(
     body_content = slide.get_body()
 
     # Check bullet count
-    if guide.max_bullet_points:
-        if len(body_content) > guide.max_bullet_points:
-            issues.append(
+    if guide.max_bullet_points and len(body_content) > guide.max_bullet_points:
+        issues.append(
                 ValidationIssue(
                     slide=slide_num,
                     severity="error",

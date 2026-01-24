@@ -1,9 +1,8 @@
 """XML namespaces for PresentationML (Open XML)."""
 
-from typing import Dict
 
 # Core PresentationML namespaces
-NAMESPACES: Dict[str, str] = {
+NAMESPACES: dict[str, str] = {
     # PresentationML
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "p14": "http://schemas.microsoft.com/office/powerpoint/2010/main",
@@ -51,7 +50,7 @@ NAMESPACES: Dict[str, str] = {
 }
 
 # For convenience, also create reverse mapping
-PREFIXES: Dict[str, str] = {v: k for k, v in NAMESPACES.items()}
+PREFIXES: dict[str, str] = {v: k for k, v in NAMESPACES.items()}
 
 # Default namespace map for lxml
 nsmap = NAMESPACES.copy()

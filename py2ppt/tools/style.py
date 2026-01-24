@@ -5,12 +5,9 @@ Functions for applying styling to presentation content.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..core.presentation import Presentation
 from ..oxml.slide import update_slide_in_package
-from ..oxml.text import RunProperties
-from ..utils.colors import parse_color, is_theme_color
+from ..utils.colors import is_theme_color, parse_color
 
 
 def set_text_style(
@@ -18,12 +15,12 @@ def set_text_style(
     slide_number: int,
     placeholder: str,
     *,
-    font: Optional[str] = None,
-    size: Optional[str] = None,
-    color: Optional[str] = None,
-    bold: Optional[bool] = None,
-    italic: Optional[bool] = None,
-    underline: Optional[bool] = None,
+    font: str | None = None,
+    size: str | None = None,
+    color: str | None = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+    underline: bool | None = None,
 ) -> None:
     """Set text styling for a placeholder.
 

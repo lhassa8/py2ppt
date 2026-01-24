@@ -8,12 +8,11 @@ The theme (ppt/theme/theme1.xml) contains:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 from lxml import etree
 
-from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
+from .ns import nsmap, qn
 from .package import Package
 
 
@@ -22,8 +21,8 @@ class ThemeColor:
     """A color in the theme."""
 
     name: str  # e.g., "accent1", "dk1", "lt1"
-    rgb: Optional[str] = None  # Hex RGB value
-    system_color: Optional[str] = None  # Windows system color
+    rgb: str | None = None  # Hex RGB value
+    system_color: str | None = None  # Windows system color
 
 
 @dataclass
@@ -31,8 +30,8 @@ class ThemeFont:
     """A font in the theme."""
 
     typeface: str  # Font family name
-    panose: Optional[str] = None  # PANOSE font classification
-    charset: Optional[int] = None  # Character set
+    panose: str | None = None  # PANOSE font classification
+    charset: int | None = None  # Character set
 
 
 @dataclass
@@ -43,8 +42,8 @@ class FontScheme:
     major_font: ThemeFont  # Heading font
     minor_font: ThemeFont  # Body font
     # Additional fonts for other scripts (Latin, EA, CS)
-    major_latin: Optional[ThemeFont] = None
-    minor_latin: Optional[ThemeFont] = None
+    major_latin: ThemeFont | None = None
+    minor_latin: ThemeFont | None = None
 
 
 class ThemePart:
@@ -68,7 +67,7 @@ class ThemePart:
         """Get the theme name."""
         return self._element.get("name", "")
 
-    def get_colors(self) -> Dict[str, str]:
+    def get_colors(self) -> dict[str, str]:
         """Get theme colors as a dict of name -> hex RGB.
 
         Returns colors like:
@@ -116,7 +115,7 @@ class ThemePart:
 
         return colors
 
-    def get_color(self, name: str) -> Optional[str]:
+    def get_color(self, name: str) -> str | None:
         """Get a specific theme color by name.
 
         Args:
@@ -206,13 +205,13 @@ class ThemePart:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "ThemePart":
+    def from_xml(cls, xml_bytes: bytes) -> ThemePart:
         """Parse from XML bytes."""
         element = etree.fromstring(xml_bytes)
         return cls(element)
 
     @classmethod
-    def new(cls, name: str = "Office Theme") -> "ThemePart":
+    def new(cls, name: str = "Office Theme") -> ThemePart:
         """Create a new theme with Office defaults."""
         nsmap_theme = {
             None: nsmap["a"],
@@ -314,19 +313,18 @@ class ThemePart:
         return cls(root)
 
 
-def get_theme_part(pkg: Package) -> Optional[ThemePart]:
+def get_theme_part(pkg: Package) -> ThemePart | None:
     """Get the theme from the package.
 
     Most presentations have a single theme at ppt/theme/theme1.xml.
     """
     for part_name, content in pkg.iter_parts():
-        if part_name.startswith("ppt/theme/") and part_name.endswith(".xml"):
-            if "/_rels/" not in part_name:
-                return ThemePart.from_xml(content)
+        if part_name.startswith("ppt/theme/") and part_name.endswith(".xml") and "/_rels/" not in part_name:
+            return ThemePart.from_xml(content)
     return None
 
 
-def get_theme_colors_with_names(pkg: Package) -> Dict[str, Tuple[str, str]]:
+def get_theme_colors_with_names(pkg: Package) -> dict[str, tuple[str, str]]:
     """Get theme colors with friendly names.
 
     Returns:

@@ -6,12 +6,11 @@ stored in ppt/slideMasters/slideMasterN.xml.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 from lxml import etree
 
-from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
+from .ns import nsmap, qn
 from .package import Package
 from .shapes import ShapeTree
 
@@ -39,7 +38,7 @@ class SlideMasterPart:
 
     def __init__(self, element: etree._Element) -> None:
         self._element = element
-        self._shape_tree: Optional[ShapeTree] = None
+        self._shape_tree: ShapeTree | None = None
 
     @property
     def element(self) -> etree._Element:
@@ -56,7 +55,7 @@ class SlideMasterPart:
                 self._shape_tree = ShapeTree()
         return self._shape_tree
 
-    def get_layout_refs(self) -> List[Tuple[str, int]]:
+    def get_layout_refs(self) -> list[tuple[str, int]]:
         """Get layout references as (rId, layoutId) tuples."""
         refs = []
         sld_layout_id_lst = self._element.find(qn("p:sldLayoutIdLst"))
@@ -67,7 +66,7 @@ class SlideMasterPart:
                 refs.append((r_id, l_id))
         return refs
 
-    def get_color_map(self) -> Dict[str, str]:
+    def get_color_map(self) -> dict[str, str]:
         """Get the color map (scheme -> actual color role mapping)."""
         color_map = {}
         clr_map = self._element.find(qn("p:clrMap"))
@@ -92,13 +91,13 @@ class SlideMasterPart:
         )
 
     @classmethod
-    def from_xml(cls, xml_bytes: bytes) -> "SlideMasterPart":
+    def from_xml(cls, xml_bytes: bytes) -> SlideMasterPart:
         """Parse from XML bytes."""
         element = etree.fromstring(xml_bytes)
         return cls(element)
 
 
-def get_master_parts(pkg: Package) -> Dict[str, SlideMasterPart]:
+def get_master_parts(pkg: Package) -> dict[str, SlideMasterPart]:
     """Get all slide master parts from the package.
 
     Returns:
@@ -107,14 +106,13 @@ def get_master_parts(pkg: Package) -> Dict[str, SlideMasterPart]:
     masters = {}
 
     for part_name, content in pkg.iter_parts():
-        if part_name.startswith("ppt/slideMasters/") and part_name.endswith(".xml"):
-            if "/_rels/" not in part_name:
-                masters[part_name] = SlideMasterPart.from_xml(content)
+        if part_name.startswith("ppt/slideMasters/") and part_name.endswith(".xml") and "/_rels/" not in part_name:
+            masters[part_name] = SlideMasterPart.from_xml(content)
 
     return masters
 
 
-def get_primary_master(pkg: Package) -> Optional[SlideMasterPart]:
+def get_primary_master(pkg: Package) -> SlideMasterPart | None:
     """Get the primary (first) slide master.
 
     Most presentations have a single master, so this is often sufficient.
@@ -130,7 +128,7 @@ def get_primary_master(pkg: Package) -> Optional[SlideMasterPart]:
 
 def get_master_for_layout(
     pkg: Package, layout_index: int
-) -> Optional[SlideMasterPart]:
+) -> SlideMasterPart | None:
     """Find the master that owns a specific layout.
 
     Args:

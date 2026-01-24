@@ -5,11 +5,7 @@ Functions for setting text content in slides.
 
 from __future__ import annotations
 
-from typing import List, Optional, Union
-
 from ..core.presentation import Presentation
-from ..core.slide import Slide
-from ..oxml.shapes import Shape
 
 
 def set_title(
@@ -17,10 +13,10 @@ def set_title(
     slide_number: int,
     text: str,
     *,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> None:
     """Set the title of a slide.
 
@@ -52,10 +48,10 @@ def set_subtitle(
     slide_number: int,
     text: str,
     *,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> None:
     """Set the subtitle of a slide.
 
@@ -84,12 +80,12 @@ def set_subtitle(
 def set_body(
     presentation: Presentation,
     slide_number: int,
-    content: Union[str, List[str]],
+    content: str | list[str],
     *,
-    levels: Optional[List[int]] = None,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
-    color: Optional[str] = None,
+    levels: list[int] | None = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
+    color: str | None = None,
 ) -> None:
     """Set the body content of a slide.
 
@@ -133,9 +129,9 @@ def add_bullet(
     text: str,
     *,
     level: int = 0,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
-    color: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
+    color: str | None = None,
 ) -> None:
     """Add a bullet point to the slide body.
 
@@ -170,10 +166,10 @@ def set_placeholder_text(
     placeholder: str,
     text: str,
     *,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> None:
     """Set text in a specific placeholder.
 
@@ -209,15 +205,15 @@ def add_text_box(
     presentation: Presentation,
     slide_number: int,
     text: str,
-    left: Union[str, int],
-    top: Union[str, int],
-    width: Union[str, int],
-    height: Union[str, int],
+    left: str | int,
+    top: str | int,
+    width: str | int,
+    height: str | int,
     *,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
     bold: bool = False,
-    color: Optional[str] = None,
+    color: str | None = None,
 ) -> None:
     """Add a text box at a specific position.
 

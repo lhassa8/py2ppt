@@ -5,26 +5,25 @@ Functions for adding tables, images, and other media to slides.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from ..core.presentation import Presentation
-from ..oxml.shapes import Table, Position
 from ..oxml.ns import CONTENT_TYPE, REL_TYPE
+from ..oxml.shapes import Position, Table
 from ..utils.units import parse_length
 
 
 def add_table(
     presentation: Presentation,
     slide_number: int,
-    data: List[List[Any]],
+    data: list[list[Any]],
     *,
-    placeholder: Optional[str] = None,
-    left: Optional[Union[str, int]] = None,
-    top: Optional[Union[str, int]] = None,
-    width: Optional[Union[str, int]] = None,
-    height: Optional[Union[str, int]] = None,
+    placeholder: str | None = None,
+    left: str | int | None = None,
+    top: str | int | None = None,
+    width: str | int | None = None,
+    height: str | int | None = None,
 ) -> None:
     """Add a table to a slide.
 
@@ -120,13 +119,13 @@ def update_table_cell(
 def add_image(
     presentation: Presentation,
     slide_number: int,
-    image_path: Union[str, Path],
+    image_path: str | Path,
     *,
-    placeholder: Optional[str] = None,
-    left: Optional[Union[str, int]] = None,
-    top: Optional[Union[str, int]] = None,
-    width: Optional[Union[str, int]] = None,
-    height: Optional[Union[str, int]] = None,
+    placeholder: str | None = None,
+    left: str | int | None = None,
+    top: str | int | None = None,
+    width: str | int | None = None,
+    height: str | int | None = None,
 ) -> None:
     """Add an image to a slide.
 

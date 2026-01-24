@@ -1,8 +1,8 @@
 """Core abstractions for py2ppt."""
 
+from .placeholder import PlaceholderMap, normalize_placeholder_name
 from .presentation import Presentation
 from .slide import Slide
-from .placeholder import PlaceholderMap, normalize_placeholder_name
 
 __all__ = [
     "Presentation",
