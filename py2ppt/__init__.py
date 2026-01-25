@@ -50,11 +50,14 @@ from .tools.animation import (
 )
 from .tools.content import (
     add_bullet,
+    add_hyperlink,
     add_text_box,
     append_notes,
     find_text,
     get_header_footer_settings,
+    get_hyperlinks,
     get_notes,
+    remove_hyperlink,
     replace_all,
     replace_text,
     set_body,
@@ -216,6 +219,10 @@ __all__ = [
     "set_slide_number_visibility",
     "set_date_visibility",
     "get_header_footer_settings",
+    # Hyperlinks
+    "add_hyperlink",
+    "remove_hyperlink",
+    "get_hyperlinks",
 
     # Media tools
     "add_table",

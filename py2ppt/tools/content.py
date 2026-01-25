@@ -853,3 +853,380 @@ def get_header_footer_settings(presentation: Presentation) -> dict:
         settings["first_slide_number"] = int(first_num)
 
     return settings
+
+
+# ============================================================================
+# Hyperlinks
+# ============================================================================
+
+
+def add_hyperlink(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    url: str | None = None,
+    slide: int | None = None,
+    action: str | None = None,
+    tooltip: str | None = None,
+) -> bool:
+    """Add a hyperlink to a shape.
+
+    Links can be external URLs, internal slide references, or navigation actions.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to add the link to
+        url: External URL (e.g., "https://example.com")
+        slide: Internal slide number to link to (1-indexed)
+        action: Navigation action. One of:
+            - "next_slide": Go to next slide
+            - "previous_slide": Go to previous slide
+            - "first_slide": Go to first slide
+            - "last_slide": Go to last slide
+            - "end_show": End the slideshow
+        tooltip: Tooltip text shown on hover
+
+    Returns:
+        True if successful, False if shape not found
+
+    Note:
+        Only one of url, slide, or action should be specified.
+
+    Example:
+        >>> # External link
+        >>> add_hyperlink(pres, 1, shape_id, url="https://example.com")
+
+        >>> # Internal slide link
+        >>> add_hyperlink(pres, 1, shape_id, slide=5, tooltip="Go to Summary")
+
+        >>> # Navigation action
+        >>> add_hyperlink(pres, 1, shape_id, action="next_slide")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, REL_TYPE, qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return False
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    shape_elem = None
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return False
+
+    # Check shapes (p:sp)
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            shape_elem = sp
+            break
+
+    # Check pictures (p:pic)
+    if shape_elem is None:
+        for pic in sp_tree.findall(f".//{qn('p:pic')}"):
+            c_nv_pr = pic.find(f".//{qn('p:cNvPr')}")
+            if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+                shape_elem = pic
+                break
+
+    if shape_elem is None:
+        return False
+
+    # Find cNvPr element where hyperlink goes
+    c_nv_pr = shape_elem.find(f".//{qn('p:cNvPr')}")
+    if c_nv_pr is None:
+        return False
+
+    # Remove existing hyperlink if any
+    existing_hlink = c_nv_pr.find(qn("a:hlinkClick"))
+    if existing_hlink is not None:
+        c_nv_pr.remove(existing_hlink)
+
+    # Create hyperlink element
+    hlink_click = etree.SubElement(c_nv_pr, qn("a:hlinkClick"))
+
+    slide_rels = pkg.get_part_rels(slide_path)
+
+    if url:
+        # External URL
+        r_id = slide_rels.add(
+            rel_type=REL_TYPE.HYPERLINK,
+            target=url,
+            target_mode="External",
+        )
+        hlink_click.set(qn("r:id"), r_id)
+
+    elif slide is not None:
+        # Internal slide link
+        # PowerPoint uses action with slide reference
+        hlink_click.set("action", "ppaction://hlinksldjump")
+        # Add relationship to target slide
+        target_slide_path = f"slide{slide}.xml"
+        r_id = slide_rels.add(
+            rel_type=REL_TYPE.SLIDE,
+            target=target_slide_path,
+        )
+        hlink_click.set(qn("r:id"), r_id)
+
+    elif action:
+        # Navigation action
+        action_map = {
+            "next_slide": "ppaction://hlinkshowjump?jump=nextslide",
+            "previous_slide": "ppaction://hlinkshowjump?jump=previousslide",
+            "first_slide": "ppaction://hlinkshowjump?jump=firstslide",
+            "last_slide": "ppaction://hlinkshowjump?jump=lastslide",
+            "end_show": "ppaction://hlinkshowjump?jump=endshow",
+        }
+        action_uri = action_map.get(action.lower().replace("-", "_").replace(" ", "_"))
+        if action_uri:
+            hlink_click.set("action", action_uri)
+        else:
+            return False
+
+    if tooltip:
+        hlink_click.set("tooltip", tooltip)
+
+    # Save changes
+    pkg.set_part_rels(slide_path, slide_rels)
+
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    presentation._dirty = True
+
+    return True
+
+
+def remove_hyperlink(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Remove a hyperlink from a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to remove the link from
+
+    Returns:
+        True if hyperlink was removed, False if not found
+
+    Example:
+        >>> remove_hyperlink(pres, 1, shape_id)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return False
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    shape_elem = None
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return False
+
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            shape_elem = sp
+            break
+
+    if shape_elem is None:
+        for pic in sp_tree.findall(f".//{qn('p:pic')}"):
+            c_nv_pr = pic.find(f".//{qn('p:cNvPr')}")
+            if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+                shape_elem = pic
+                break
+
+    if shape_elem is None:
+        return False
+
+    # Find and remove hyperlink
+    c_nv_pr = shape_elem.find(f".//{qn('p:cNvPr')}")
+    if c_nv_pr is None:
+        return False
+
+    hlink = c_nv_pr.find(qn("a:hlinkClick"))
+    if hlink is None:
+        return False
+
+    c_nv_pr.remove(hlink)
+
+    # Save changes
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    presentation._dirty = True
+
+    return True
+
+
+def get_hyperlinks(
+    presentation: Presentation,
+    slide_number: int,
+) -> list[dict]:
+    """Get all hyperlinks on a slide.
+
+    Args:
+        presentation: The presentation to inspect
+        slide_number: The slide number (1-indexed)
+
+    Returns:
+        List of dicts with hyperlink info:
+        - shape_id: ID of the shape with the link
+        - shape_name: Name of the shape
+        - url: External URL (if applicable)
+        - slide: Target slide number (if internal link)
+        - action: Navigation action (if applicable)
+        - tooltip: Tooltip text (if set)
+
+    Example:
+        >>> links = get_hyperlinks(pres, 1)
+        >>> for link in links:
+        ...     print(f"Shape {link['shape_id']}: {link.get('url', link.get('action'))}")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import REL_TYPE, qn
+
+    pkg = presentation._package
+    links = []
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return links
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return links
+
+    slide_elem = etree.fromstring(slide_xml)
+    slide_rels = pkg.get_part_rels(slide_path)
+
+    # Find all shapes with hyperlinks
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return links
+
+    # Check shapes and pictures
+    for shape_type in ["p:sp", "p:pic"]:
+        for shape in sp_tree.findall(f".//{qn(shape_type)}"):
+            c_nv_pr = shape.find(f".//{qn('p:cNvPr')}")
+            if c_nv_pr is None:
+                continue
+
+            hlink = c_nv_pr.find(qn("a:hlinkClick"))
+            if hlink is None:
+                continue
+
+            shape_id = int(c_nv_pr.get("id", "0"))
+            shape_name = c_nv_pr.get("name", "")
+
+            link_info = {
+                "shape_id": shape_id,
+                "shape_name": shape_name,
+            }
+
+            # Get tooltip
+            tooltip = hlink.get("tooltip")
+            if tooltip:
+                link_info["tooltip"] = tooltip
+
+            # Get relationship ID
+            r_id = hlink.get(qn("r:id"))
+            action = hlink.get("action")
+
+            if r_id:
+                # Look up the relationship
+                link_rel = slide_rels.get(r_id)
+                if link_rel:
+                    if link_rel.rel_type == REL_TYPE.HYPERLINK:
+                        link_info["url"] = link_rel.target
+                    elif link_rel.rel_type == REL_TYPE.SLIDE:
+                        # Parse slide number from target
+                        target = link_rel.target
+                        if "slide" in target.lower():
+                            import re
+                            match = re.search(r"slide(\d+)", target, re.IGNORECASE)
+                            if match:
+                                link_info["slide"] = int(match.group(1))
+
+            if action:
+                # Parse action
+                action_reverse = {
+                    "ppaction://hlinkshowjump?jump=nextslide": "next_slide",
+                    "ppaction://hlinkshowjump?jump=previousslide": "previous_slide",
+                    "ppaction://hlinkshowjump?jump=firstslide": "first_slide",
+                    "ppaction://hlinkshowjump?jump=lastslide": "last_slide",
+                    "ppaction://hlinkshowjump?jump=endshow": "end_show",
+                    "ppaction://hlinksldjump": "slide_jump",
+                }
+                parsed_action = action_reverse.get(action.lower())
+                if parsed_action and parsed_action != "slide_jump":
+                    link_info["action"] = parsed_action
+
+            links.append(link_info)
+
+    return links
