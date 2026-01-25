@@ -53,12 +53,16 @@ from .tools.content import (
     add_text_box,
     append_notes,
     find_text,
+    get_header_footer_settings,
     get_notes,
     replace_all,
     replace_text,
     set_body,
+    set_date_visibility,
+    set_footer,
     set_notes,
     set_placeholder_text,
+    set_slide_number_visibility,
     set_subtitle,
     set_title,
 )
@@ -109,10 +113,14 @@ from .tools.shapes import (
     set_shape_order,
 )
 from .tools.slides import (
+    add_section,
     add_slide,
     clear_slide_background,
+    delete_section,
     delete_slide,
     duplicate_slide,
+    get_sections,
+    rename_section,
     reorder_slides,
     set_slide_background,
 )
@@ -169,6 +177,11 @@ __all__ = [
     "reorder_slides",
     "set_slide_background",
     "clear_slide_background",
+    # Sections
+    "add_section",
+    "get_sections",
+    "rename_section",
+    "delete_section",
 
     # Content tools
     "set_title",
@@ -185,6 +198,11 @@ __all__ = [
     "find_text",
     "replace_text",
     "replace_all",
+    # Headers/Footers
+    "set_footer",
+    "set_slide_number_visibility",
+    "set_date_visibility",
+    "get_header_footer_settings",
 
     # Media tools
     "add_table",

@@ -339,3 +339,279 @@ def clear_slide_background(
         slide_number,
         slide_part,
     )
+
+
+# ============================================================================
+# Sections
+# ============================================================================
+
+
+def add_section(
+    presentation: Presentation,
+    name: str,
+    *,
+    before_slide: int | None = None,
+) -> int:
+    """Add a section to the presentation.
+
+    Sections help organize slides into logical groups.
+
+    Args:
+        presentation: The presentation to modify
+        name: Section name
+        before_slide: Insert section before this slide (1-indexed).
+                     If None, adds at end of presentation.
+
+    Returns:
+        Section index (0-indexed)
+
+    Example:
+        >>> add_section(pres, "Introduction", before_slide=1)
+        >>> add_section(pres, "Conclusion")  # At end
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    # Find or create sectionLst element
+    # PowerPoint 2010+ uses p14:sectionLst in extensions
+    p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+    nsmap_ext = {"p14": p14_ns}
+
+    # Helper for p14 qualified names
+    def p14(tag: str) -> str:
+        return f"{{{p14_ns}}}{tag}"
+
+    ext_lst = pres_elem.find(qn("p:extLst"))
+    if ext_lst is None:
+        ext_lst = etree.SubElement(pres_elem, qn("p:extLst"))
+
+    # Look for existing section list extension
+    section_lst = None
+    for ext in ext_lst.findall(qn("p:ext")):
+        if ext.get("uri") == "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}":
+            section_lst = ext.find(p14("sectionLst"))
+            break
+
+    if section_lst is None:
+        # Create extension for sections
+        ext = etree.SubElement(ext_lst, qn("p:ext"))
+        ext.set("uri", "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}")
+        section_lst = etree.SubElement(
+            ext,
+            p14("sectionLst"),
+            nsmap=nsmap_ext
+        )
+
+    # Determine section ID
+    existing_sections = section_lst.findall(p14("section"))
+    section_id = len(existing_sections)
+
+    # Create new section
+    section = etree.SubElement(
+        section_lst,
+        p14("section"),
+    )
+    section.set("name", name)
+    section.set("id", f"{{{section_id}}}")
+
+    # Add slide list for the section
+    sld_id_lst = etree.SubElement(section, p14("sldIdLst"))
+
+    # If before_slide specified, assign slides to sections appropriately
+    if before_slide is not None:
+        # Get all slide IDs
+        pres_sld_id_lst = pres_elem.find(qn("p:sldIdLst"))
+        if pres_sld_id_lst is not None:
+            slide_ids = list(pres_sld_id_lst.findall(qn("p:sldId")))
+            if before_slide <= len(slide_ids):
+                # This section starts at before_slide
+                for sld_id in slide_ids[before_slide - 1:]:
+                    sld_id_entry = etree.SubElement(sld_id_lst, p14("sldId"))
+                    sld_id_entry.set("id", sld_id.get("id"))
+
+    presentation._package.set_part(
+        "ppt/presentation.xml",
+        pres_part.to_xml(),
+        CONTENT_TYPE.PRESENTATION,
+    )
+    presentation._dirty = True
+
+    return section_id
+
+
+def get_sections(presentation: Presentation) -> list[dict]:
+    """Get all sections in the presentation.
+
+    Returns:
+        List of section dicts with:
+        - index: Section index (0-indexed)
+        - name: Section name
+        - slide_count: Number of slides in section
+
+    Example:
+        >>> sections = get_sections(pres)
+        >>> for s in sections:
+        ...     print(f"{s['name']}: {s['slide_count']} slides")
+    """
+    from ..oxml.ns import qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    sections = []
+
+    # Look for p14:sectionLst in extensions
+    p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+
+    def p14(tag: str) -> str:
+        return f"{{{p14_ns}}}{tag}"
+
+    ext_lst = pres_elem.find(qn("p:extLst"))
+    if ext_lst is None:
+        return sections
+
+    for ext in ext_lst.findall(qn("p:ext")):
+        section_lst = ext.find(p14("sectionLst"))
+        if section_lst is not None:
+            for i, section in enumerate(section_lst.findall(p14("section"))):
+                sld_id_lst = section.find(p14("sldIdLst"))
+                slide_count = 0
+                if sld_id_lst is not None:
+                    slide_count = len(sld_id_lst.findall(p14("sldId")))
+
+                sections.append({
+                    "index": i,
+                    "name": section.get("name", ""),
+                    "slide_count": slide_count,
+                })
+
+    return sections
+
+
+def rename_section(
+    presentation: Presentation,
+    section_index: int,
+    new_name: str,
+) -> bool:
+    """Rename a section.
+
+    Args:
+        presentation: The presentation to modify
+        section_index: Section index (0-indexed)
+        new_name: New section name
+
+    Returns:
+        True if renamed, False if section not found
+
+    Example:
+        >>> rename_section(pres, 0, "Executive Summary")
+    """
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+
+    def p14(tag: str) -> str:
+        return f"{{{p14_ns}}}{tag}"
+
+    ext_lst = pres_elem.find(qn("p:extLst"))
+    if ext_lst is None:
+        return False
+
+    for ext in ext_lst.findall(qn("p:ext")):
+        section_lst = ext.find(p14("sectionLst"))
+        if section_lst is not None:
+            sections = section_lst.findall(p14("section"))
+            if 0 <= section_index < len(sections):
+                sections[section_index].set("name", new_name)
+
+                presentation._package.set_part(
+                    "ppt/presentation.xml",
+                    pres_part.to_xml(),
+                    CONTENT_TYPE.PRESENTATION,
+                )
+                presentation._dirty = True
+                return True
+
+    return False
+
+
+def delete_section(
+    presentation: Presentation,
+    section_index: int,
+    *,
+    delete_slides: bool = False,
+) -> bool:
+    """Delete a section.
+
+    Args:
+        presentation: The presentation to modify
+        section_index: Section index (0-indexed)
+        delete_slides: Also delete slides in the section (default False)
+
+    Returns:
+        True if deleted, False if section not found
+
+    Example:
+        >>> delete_section(pres, 2)  # Remove section, keep slides
+        >>> delete_section(pres, 2, delete_slides=True)  # Remove section and slides
+    """
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+
+    def p14(tag: str) -> str:
+        return f"{{{p14_ns}}}{tag}"
+
+    ext_lst = pres_elem.find(qn("p:extLst"))
+    if ext_lst is None:
+        return False
+
+    for ext in ext_lst.findall(qn("p:ext")):
+        section_lst = ext.find(p14("sectionLst"))
+        if section_lst is not None:
+            sections = section_lst.findall(p14("section"))
+            if 0 <= section_index < len(sections):
+                section = sections[section_index]
+
+                # Optionally delete slides
+                if delete_slides:
+                    sld_id_lst = section.find(p14("sldIdLst"))
+                    if sld_id_lst is not None:
+                        slide_ids = [
+                            int(s.get("id"))
+                            for s in sld_id_lst.findall(p14("sldId"))
+                        ]
+                        # Delete slides in reverse order to maintain indices
+                        for sld_id in reversed(slide_ids):
+                            # Find slide number from ID
+                            pres_sld_id_lst = pres_elem.find(qn("p:sldIdLst"))
+                            if pres_sld_id_lst is not None:
+                                for i, sld in enumerate(
+                                    pres_sld_id_lst.findall(qn("p:sldId"))
+                                ):
+                                    if int(sld.get("id")) == sld_id:
+                                        presentation.delete_slide(i + 1)
+                                        break
+
+                # Remove section
+                section_lst.remove(section)
+
+                presentation._package.set_part(
+                    "ppt/presentation.xml",
+                    pres_part.to_xml(),
+                    CONTENT_TYPE.PRESENTATION,
+                )
+                presentation._dirty = True
+                return True
+
+    return False

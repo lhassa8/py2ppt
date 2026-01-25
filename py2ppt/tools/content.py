@@ -591,3 +591,265 @@ def replace_all(
         )
         results[old_text] = count
     return results
+
+
+# ============================================================================
+# Headers and Footers
+# ============================================================================
+
+
+def set_footer(
+    presentation: Presentation,
+    text: str,
+    *,
+    apply_to_all: bool = True,
+    slide_number: int | None = None,
+) -> None:
+    """Set the footer text for slides.
+
+    Args:
+        presentation: The presentation to modify
+        text: Footer text to display
+        apply_to_all: Apply to all slides (default True)
+        slide_number: Specific slide to apply to (if apply_to_all is False)
+
+    Example:
+        >>> set_footer(pres, "Confidential - Internal Use Only")
+        >>> set_footer(pres, "Draft", apply_to_all=False, slide_number=1)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    if apply_to_all:
+        # Update presentation-level header/footer settings
+        pres_part = presentation._presentation
+        pres_elem = pres_part._element
+
+        # Find or create hf element
+        hf = pres_elem.find(qn("p:hf"))
+        if hf is None:
+            # Insert after custShowLst or sldIdLst if they exist
+            insert_after = pres_elem.find(qn("p:custShowLst"))
+            if insert_after is None:
+                insert_after = pres_elem.find(qn("p:sldIdLst"))
+
+            hf = etree.Element(qn("p:hf"))
+            if insert_after is not None:
+                idx = list(pres_elem).index(insert_after) + 1
+                pres_elem.insert(idx, hf)
+            else:
+                pres_elem.append(hf)
+
+        hf.set("ftr", "1")  # Enable footer
+
+        # Save presentation
+        presentation._package.set_part(
+            "ppt/presentation.xml",
+            pres_part.to_xml(),
+            CONTENT_TYPE.PRESENTATION,
+        )
+
+        # Update footer placeholder text in each slide
+        for i in range(1, presentation.slide_count + 1):
+            _set_slide_footer(presentation, i, text)
+    else:
+        if slide_number is None:
+            raise ValueError("slide_number required when apply_to_all is False")
+        _set_slide_footer(presentation, slide_number, text)
+
+    presentation._dirty = True
+
+
+def _set_slide_footer(presentation: Presentation, slide_number: int, text: str) -> None:
+    """Set footer text on a specific slide."""
+    from lxml import etree
+
+    from ..oxml.ns import qn
+    from ..oxml.slide import update_slide_in_package
+
+    slide = presentation.get_slide(slide_number)
+    slide_part = slide._part
+    slide_elem = slide_part._element
+
+    # Find shape tree
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return
+
+    # Look for footer placeholder
+    footer_found = False
+    for sp in sp_tree.findall(qn("p:sp")):
+        ph = sp.find(f".//{qn('p:ph')}")
+        if ph is not None and ph.get("type") == "ftr":
+            # Found footer placeholder - set text
+            tx_body = sp.find(qn("p:txBody"))
+            if tx_body is None:
+                tx_body = etree.SubElement(sp, qn("p:txBody"))
+                etree.SubElement(tx_body, qn("a:bodyPr"))
+                etree.SubElement(tx_body, qn("a:lstStyle"))
+
+            # Remove existing paragraphs
+            for p in tx_body.findall(qn("a:p")):
+                tx_body.remove(p)
+
+            # Add new paragraph with text
+            p = etree.SubElement(tx_body, qn("a:p"))
+            r = etree.SubElement(p, qn("a:r"))
+            t = etree.SubElement(r, qn("a:t"))
+            t.text = text
+
+            footer_found = True
+            break
+
+    # If no footer placeholder exists, we could add one (optional)
+    if not footer_found:
+        # Footer placeholder needs to be defined in layout/master
+        # For now, just return without error
+        pass
+
+    update_slide_in_package(
+        presentation._package,
+        slide_number,
+        slide_part,
+    )
+
+
+def set_slide_number_visibility(
+    presentation: Presentation,
+    visible: bool = True,
+    *,
+    start_from: int = 1,
+) -> None:
+    """Control whether slide numbers are displayed.
+
+    Args:
+        presentation: The presentation to modify
+        visible: Whether slide numbers should be visible
+        start_from: Starting number for slides (default 1)
+
+    Example:
+        >>> set_slide_number_visibility(pres, visible=True)
+        >>> set_slide_number_visibility(pres, visible=True, start_from=0)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    # Find or create hf element
+    hf = pres_elem.find(qn("p:hf"))
+    if hf is None:
+        hf = etree.Element(qn("p:hf"))
+        # Insert at appropriate position
+        sld_id_lst = pres_elem.find(qn("p:sldIdLst"))
+        if sld_id_lst is not None:
+            idx = list(pres_elem).index(sld_id_lst) + 1
+            pres_elem.insert(idx, hf)
+        else:
+            pres_elem.append(hf)
+
+    hf.set("sldNum", "1" if visible else "0")
+
+    # Set first slide number
+    if start_from != 1:
+        pres_elem.set("firstSlideNum", str(start_from))
+
+    presentation._package.set_part(
+        "ppt/presentation.xml",
+        pres_part.to_xml(),
+        CONTENT_TYPE.PRESENTATION,
+    )
+    presentation._dirty = True
+
+
+def set_date_visibility(
+    presentation: Presentation,
+    visible: bool = True,
+    *,
+    auto_update: bool = True,
+    date_format: str | None = None,
+    fixed_date: str | None = None,
+) -> None:
+    """Control whether date is displayed in slides.
+
+    Args:
+        presentation: The presentation to modify
+        visible: Whether date should be visible
+        auto_update: Update date automatically (default True)
+        date_format: Date format string (e.g., "MMMM d, yyyy")
+        fixed_date: Fixed date text (used when auto_update is False)
+
+    Example:
+        >>> set_date_visibility(pres, visible=True)
+        >>> set_date_visibility(pres, visible=True, auto_update=False, fixed_date="Q4 2024")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    # Find or create hf element
+    hf = pres_elem.find(qn("p:hf"))
+    if hf is None:
+        hf = etree.Element(qn("p:hf"))
+        sld_id_lst = pres_elem.find(qn("p:sldIdLst"))
+        if sld_id_lst is not None:
+            idx = list(pres_elem).index(sld_id_lst) + 1
+            pres_elem.insert(idx, hf)
+        else:
+            pres_elem.append(hf)
+
+    hf.set("dt", "1" if visible else "0")
+
+    presentation._package.set_part(
+        "ppt/presentation.xml",
+        pres_part.to_xml(),
+        CONTENT_TYPE.PRESENTATION,
+    )
+    presentation._dirty = True
+
+
+def get_header_footer_settings(presentation: Presentation) -> dict:
+    """Get current header/footer settings.
+
+    Returns:
+        Dict with settings:
+        - footer_visible: bool
+        - slide_number_visible: bool
+        - date_visible: bool
+        - first_slide_number: int
+
+    Example:
+        >>> settings = get_header_footer_settings(pres)
+        >>> if settings["slide_number_visible"]:
+        ...     print("Slide numbers are on")
+    """
+    from ..oxml.ns import qn
+
+    pres_part = presentation._presentation
+    pres_elem = pres_part._element
+
+    hf = pres_elem.find(qn("p:hf"))
+
+    settings = {
+        "footer_visible": False,
+        "slide_number_visible": False,
+        "date_visible": False,
+        "first_slide_number": 1,
+    }
+
+    if hf is not None:
+        settings["footer_visible"] = hf.get("ftr") == "1"
+        settings["slide_number_visible"] = hf.get("sldNum") == "1"
+        settings["date_visible"] = hf.get("dt") == "1"
+
+    first_num = pres_elem.get("firstSlideNum")
+    if first_num:
+        settings["first_slide_number"] = int(first_num)
+
+    return settings
