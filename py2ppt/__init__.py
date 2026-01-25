@@ -53,10 +53,13 @@ from .tools.content import (
     add_hyperlink,
     add_text_box,
     append_notes,
+    append_shape_text,
     find_text,
     get_header_footer_settings,
     get_hyperlinks,
     get_notes,
+    get_shape_text,
+    get_text_columns,
     remove_hyperlink,
     replace_all,
     replace_text,
@@ -65,8 +68,10 @@ from .tools.content import (
     set_footer,
     set_notes,
     set_placeholder_text,
+    set_shape_text,
     set_slide_number_visibility,
     set_subtitle,
+    set_text_columns,
     set_title,
 )
 from .tools.diagrams import (
@@ -238,6 +243,13 @@ __all__ = [
     "add_hyperlink",
     "remove_hyperlink",
     "get_hyperlinks",
+    # Text columns
+    "set_text_columns",
+    "get_text_columns",
+    # Shape text
+    "set_shape_text",
+    "get_shape_text",
+    "append_shape_text",
 
     # Media tools
     "add_table",

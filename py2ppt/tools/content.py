@@ -306,7 +306,7 @@ def add_text_box(
     font_family: str | None = None,
     bold: bool = False,
     color: str | None = None,
-) -> None:
+) -> int:
     """Add a text box at a specific position.
 
     Args:
@@ -322,11 +322,14 @@ def add_text_box(
         bold: Whether to make the text bold
         color: Color as hex, rgb, or name
 
+    Returns:
+        The shape ID of the created text box
+
     Example:
-        >>> add_text_box(pres, 1, "Note", "1in", "6in", "2in", "0.5in")
+        >>> shape_id = add_text_box(pres, 1, "Note", "1in", "6in", "2in", "0.5in")
     """
     slide = presentation.get_slide(slide_number)
-    slide.add_text_box(
+    shape = slide.add_text_box(
         text,
         left,
         top,
@@ -337,6 +340,7 @@ def add_text_box(
         bold=bold,
         color=color,
     )
+    return shape.id
 
 
 def set_notes(
@@ -1230,3 +1234,533 @@ def get_hyperlinks(
             links.append(link_info)
 
     return links
+
+
+# ============================================================================
+# Text Columns
+# ============================================================================
+
+
+def set_text_columns(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    num_columns: int = 2,
+    *,
+    spacing: str | int = "0.5in",
+) -> bool:
+    """Set the number of text columns in a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to modify
+        num_columns: Number of columns (1-10)
+        spacing: Space between columns (e.g., "0.5in", "1cm")
+
+    Returns:
+        True if successful, False if shape not found
+
+    Example:
+        >>> # Two-column text box
+        >>> set_text_columns(pres, 1, shape_id, num_columns=2)
+
+        >>> # Three columns with custom spacing
+        >>> set_text_columns(pres, 1, shape_id, num_columns=3, spacing="0.25in")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+    from ..utils.units import parse_length
+
+    if num_columns < 1 or num_columns > 10:
+        raise ValueError("num_columns must be between 1 and 10")
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return False
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return False
+
+    shape_elem = None
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            shape_elem = sp
+            break
+
+    if shape_elem is None:
+        return False
+
+    # Find or create txBody/bodyPr
+    tx_body = shape_elem.find(qn("p:txBody"))
+    if tx_body is None:
+        return False
+
+    body_pr = tx_body.find(qn("a:bodyPr"))
+    if body_pr is None:
+        body_pr = etree.Element(qn("a:bodyPr"))
+        tx_body.insert(0, body_pr)
+
+    # Set columns
+    body_pr.set("numCol", str(num_columns))
+
+    # Set spacing (in EMUs)
+    spacing_emu = int(parse_length(spacing)) if isinstance(spacing, str) else spacing
+    body_pr.set("spcCol", str(spacing_emu))
+
+    # Save
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    presentation._dirty = True
+
+    return True
+
+
+def get_text_columns(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> dict | None:
+    """Get text column settings for a shape.
+
+    Args:
+        presentation: The presentation to inspect
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to inspect
+
+    Returns:
+        Dict with column settings or None if shape not found:
+        - columns: Number of columns
+        - spacing: Space between columns (EMUs)
+
+    Example:
+        >>> cols = get_text_columns(pres, 1, shape_id)
+        >>> print(f"Columns: {cols['columns']}")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return None
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return None
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return None
+
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            tx_body = sp.find(qn("p:txBody"))
+            if tx_body is None:
+                return {"columns": 1, "spacing": 0}
+
+            body_pr = tx_body.find(qn("a:bodyPr"))
+            if body_pr is None:
+                return {"columns": 1, "spacing": 0}
+
+            return {
+                "columns": int(body_pr.get("numCol", "1")),
+                "spacing": int(body_pr.get("spcCol", "0")),
+            }
+
+    return None
+
+
+# ============================================================================
+# Shape Text
+# ============================================================================
+
+
+def set_shape_text(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    text: str,
+    *,
+    font_size: int | None = None,
+    bold: bool = False,
+    italic: bool = False,
+    color: str | None = None,
+    align: str = "center",
+    vertical_align: str = "middle",
+) -> bool:
+    """Set or replace text in a shape.
+
+    Works with auto-shapes (rectangles, ellipses, etc.) to add text.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to modify
+        text: Text to set
+        font_size: Font size in points
+        bold: Make text bold
+        italic: Make text italic
+        color: Text color as hex (e.g., "#FF0000")
+        align: Horizontal alignment ("left", "center", "right")
+        vertical_align: Vertical alignment ("top", "middle", "bottom")
+
+    Returns:
+        True if successful, False if shape not found
+
+    Example:
+        >>> # Add centered text to a shape
+        >>> set_shape_text(pres, 1, shape_id, "Click Here",
+        ...     font_size=24, bold=True, color="#FFFFFF")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return False
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return False
+
+    shape_elem = None
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            shape_elem = sp
+            break
+
+    if shape_elem is None:
+        return False
+
+    # Find or create txBody
+    tx_body = shape_elem.find(qn("p:txBody"))
+    if tx_body is None:
+        tx_body = etree.SubElement(shape_elem, qn("p:txBody"))
+
+    # Clear existing content
+    for child in list(tx_body):
+        tx_body.remove(child)
+
+    # Body properties
+    body_pr = etree.SubElement(tx_body, qn("a:bodyPr"))
+
+    # Vertical alignment
+    v_align_map = {"top": "t", "middle": "ctr", "bottom": "b"}
+    body_pr.set("anchor", v_align_map.get(vertical_align.lower(), "ctr"))
+
+    # List style
+    etree.SubElement(tx_body, qn("a:lstStyle"))
+
+    # Paragraph
+    p = etree.SubElement(tx_body, qn("a:p"))
+
+    # Paragraph properties (alignment)
+    p_pr = etree.SubElement(p, qn("a:pPr"))
+    h_align_map = {"left": "l", "center": "ctr", "right": "r"}
+    p_pr.set("algn", h_align_map.get(align.lower(), "ctr"))
+
+    # Run
+    r = etree.SubElement(p, qn("a:r"))
+
+    # Run properties
+    r_pr = etree.SubElement(r, qn("a:rPr"))
+    r_pr.set("lang", "en-US")
+
+    if font_size:
+        r_pr.set("sz", str(font_size * 100))  # Size in centipoints
+    if bold:
+        r_pr.set("b", "1")
+    if italic:
+        r_pr.set("i", "1")
+
+    if color:
+        solid_fill = etree.SubElement(r_pr, qn("a:solidFill"))
+        srgb_clr = etree.SubElement(solid_fill, qn("a:srgbClr"))
+        srgb_clr.set("val", color.lstrip("#").upper())
+
+    # Text
+    t = etree.SubElement(r, qn("a:t"))
+    t.text = text
+
+    # End paragraph run properties
+    etree.SubElement(p, qn("a:endParaRPr"))
+
+    # Save
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    presentation._dirty = True
+
+    return True
+
+
+def get_shape_text(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> str | None:
+    """Get text from a shape.
+
+    Args:
+        presentation: The presentation to inspect
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to inspect
+
+    Returns:
+        Text content or None if shape not found or has no text
+
+    Example:
+        >>> text = get_shape_text(pres, 1, shape_id)
+        >>> if text:
+        ...     print(f"Shape text: {text}")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return None
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return None
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return None
+
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            # Get all text elements
+            text_parts = []
+            for t in sp.findall(f".//{qn('a:t')}"):
+                if t.text:
+                    text_parts.append(t.text)
+            return "".join(text_parts) if text_parts else None
+
+    return None
+
+
+def append_shape_text(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    text: str,
+    *,
+    new_paragraph: bool = False,
+    font_size: int | None = None,
+    bold: bool = False,
+    italic: bool = False,
+    color: str | None = None,
+) -> bool:
+    """Append text to an existing shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to modify
+        text: Text to append
+        new_paragraph: If True, start a new paragraph
+        font_size: Font size in points
+        bold: Make appended text bold
+        italic: Make appended text italic
+        color: Text color as hex
+
+    Returns:
+        True if successful, False if shape not found
+
+    Example:
+        >>> # Append to existing text
+        >>> append_shape_text(pres, 1, shape_id, " - continued")
+
+        >>> # Add new paragraph
+        >>> append_shape_text(pres, 1, shape_id, "Next point", new_paragraph=True)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pkg = presentation._package
+
+    # Get slide element
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_xml = pkg.get_part(slide_path)
+    if slide_xml is None:
+        return False
+
+    slide_elem = etree.fromstring(slide_xml)
+
+    # Find shape by ID
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return False
+
+    shape_elem = None
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        c_nv_pr = sp.find(f".//{qn('p:cNvPr')}")
+        if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+            shape_elem = sp
+            break
+
+    if shape_elem is None:
+        return False
+
+    # Find txBody
+    tx_body = shape_elem.find(qn("p:txBody"))
+    if tx_body is None:
+        # No text body, create one with set_shape_text
+        return set_shape_text(
+            presentation, slide_number, shape_id, text,
+            font_size=font_size, bold=bold, italic=italic, color=color
+        )
+
+    if new_paragraph:
+        # Add new paragraph
+        p = etree.SubElement(tx_body, qn("a:p"))
+    else:
+        # Find last paragraph
+        paragraphs = tx_body.findall(qn("a:p"))
+        if paragraphs:
+            p = paragraphs[-1]
+            # Remove endParaRPr if exists (we'll add it back)
+            end_pr = p.find(qn("a:endParaRPr"))
+            if end_pr is not None:
+                p.remove(end_pr)
+        else:
+            p = etree.SubElement(tx_body, qn("a:p"))
+
+    # Add run
+    r = etree.SubElement(p, qn("a:r"))
+
+    # Run properties
+    r_pr = etree.SubElement(r, qn("a:rPr"))
+    r_pr.set("lang", "en-US")
+
+    if font_size:
+        r_pr.set("sz", str(font_size * 100))
+    if bold:
+        r_pr.set("b", "1")
+    if italic:
+        r_pr.set("i", "1")
+
+    if color:
+        solid_fill = etree.SubElement(r_pr, qn("a:solidFill"))
+        srgb_clr = etree.SubElement(solid_fill, qn("a:srgbClr"))
+        srgb_clr.set("val", color.lstrip("#").upper())
+
+    # Text
+    t = etree.SubElement(r, qn("a:t"))
+    t.text = text
+
+    # Add endParaRPr
+    etree.SubElement(p, qn("a:endParaRPr"))
+
+    # Save
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    presentation._dirty = True
+
+    return True
