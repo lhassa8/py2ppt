@@ -51,7 +51,13 @@ from .tools.animation import (
 from .tools.content import (
     add_bullet,
     add_text_box,
+    append_notes,
+    find_text,
+    get_notes,
+    replace_all,
+    replace_text,
     set_body,
+    set_notes,
     set_placeholder_text,
     set_subtitle,
     set_title,
@@ -82,22 +88,33 @@ from .tools.media import (
 )
 from .tools.presentation import (
     create_presentation,
+    get_slide_size,
     open_presentation,
     save_presentation,
+    set_slide_size,
+    set_slide_size_preset,
 )
 from .tools.shapes import (
     add_connector,
     add_shape,
+    bring_forward,
+    bring_to_front,
     delete_shape,
+    get_shape_order,
     group_shapes,
     move_shape,
     resize_shape,
+    send_backward,
+    send_to_back,
+    set_shape_order,
 )
 from .tools.slides import (
     add_slide,
+    clear_slide_background,
     delete_slide,
     duplicate_slide,
     reorder_slides,
+    set_slide_background,
 )
 from .tools.style import (
     set_text_style,
@@ -141,12 +158,17 @@ __all__ = [
     "create_presentation",
     "open_presentation",
     "save_presentation",
+    "get_slide_size",
+    "set_slide_size",
+    "set_slide_size_preset",
 
     # Slide tools
     "add_slide",
     "delete_slide",
     "duplicate_slide",
     "reorder_slides",
+    "set_slide_background",
+    "clear_slide_background",
 
     # Content tools
     "set_title",
@@ -155,6 +177,14 @@ __all__ = [
     "add_bullet",
     "set_placeholder_text",
     "add_text_box",
+    # Speaker notes
+    "set_notes",
+    "get_notes",
+    "append_notes",
+    # Find/replace
+    "find_text",
+    "replace_text",
+    "replace_all",
 
     # Media tools
     "add_table",
@@ -186,6 +216,13 @@ __all__ = [
     "delete_shape",
     "move_shape",
     "resize_shape",
+    # Object ordering
+    "bring_to_front",
+    "send_to_back",
+    "bring_forward",
+    "send_backward",
+    "get_shape_order",
+    "set_shape_order",
 
     # Theme tools
     "set_theme_color",

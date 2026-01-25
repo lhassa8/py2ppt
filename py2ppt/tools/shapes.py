@@ -507,3 +507,204 @@ def resize_shape(
 
     slide._save()
     return True
+
+
+def bring_to_front(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Bring a shape to the front (top of z-order).
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: ID of the shape to bring forward
+
+    Returns:
+        True if shape was moved, False if not found
+
+    Example:
+        >>> bring_to_front(pres, 1, shape_id)
+    """
+    slide = presentation.get_slide(slide_number)
+    shape_tree = slide._part.shape_tree
+
+    shape = shape_tree.get_shape_by_id(shape_id)
+    if shape is None:
+        return False
+
+    # Remove and re-add at the end (front)
+    if shape in shape_tree._shapes:
+        shape_tree._shapes.remove(shape)
+        shape_tree._shapes.append(shape)
+        slide._save()
+        return True
+
+    return False
+
+
+def send_to_back(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Send a shape to the back (bottom of z-order).
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: ID of the shape to send back
+
+    Returns:
+        True if shape was moved, False if not found
+
+    Example:
+        >>> send_to_back(pres, 1, shape_id)
+    """
+    slide = presentation.get_slide(slide_number)
+    shape_tree = slide._part.shape_tree
+
+    shape = shape_tree.get_shape_by_id(shape_id)
+    if shape is None:
+        return False
+
+    # Remove and re-add at the beginning (back)
+    if shape in shape_tree._shapes:
+        shape_tree._shapes.remove(shape)
+        shape_tree._shapes.insert(0, shape)
+        slide._save()
+        return True
+
+    return False
+
+
+def bring_forward(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Bring a shape forward one level in z-order.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: ID of the shape to bring forward
+
+    Returns:
+        True if shape was moved, False if not found or already at front
+
+    Example:
+        >>> bring_forward(pres, 1, shape_id)
+    """
+    slide = presentation.get_slide(slide_number)
+    shape_tree = slide._part.shape_tree
+
+    shape = shape_tree.get_shape_by_id(shape_id)
+    if shape is None:
+        return False
+
+    if shape in shape_tree._shapes:
+        idx = shape_tree._shapes.index(shape)
+        if idx < len(shape_tree._shapes) - 1:
+            shape_tree._shapes.remove(shape)
+            shape_tree._shapes.insert(idx + 1, shape)
+            slide._save()
+            return True
+
+    return False
+
+
+def send_backward(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Send a shape backward one level in z-order.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: ID of the shape to send backward
+
+    Returns:
+        True if shape was moved, False if not found or already at back
+
+    Example:
+        >>> send_backward(pres, 1, shape_id)
+    """
+    slide = presentation.get_slide(slide_number)
+    shape_tree = slide._part.shape_tree
+
+    shape = shape_tree.get_shape_by_id(shape_id)
+    if shape is None:
+        return False
+
+    if shape in shape_tree._shapes:
+        idx = shape_tree._shapes.index(shape)
+        if idx > 0:
+            shape_tree._shapes.remove(shape)
+            shape_tree._shapes.insert(idx - 1, shape)
+            slide._save()
+            return True
+
+    return False
+
+
+def get_shape_order(
+    presentation: Presentation,
+    slide_number: int,
+) -> list[int]:
+    """Get the z-order of shapes on a slide.
+
+    Args:
+        presentation: The presentation to query
+        slide_number: The slide number (1-indexed)
+
+    Returns:
+        List of shape IDs in order (back to front)
+
+    Example:
+        >>> order = get_shape_order(pres, 1)
+        >>> print(f"Frontmost shape: {order[-1]}")
+    """
+    slide = presentation.get_slide(slide_number)
+    return [shape.id for shape in slide._part.shape_tree._shapes]
+
+
+def set_shape_order(
+    presentation: Presentation,
+    slide_number: int,
+    shape_ids: list[int],
+) -> bool:
+    """Set the z-order of shapes on a slide.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_ids: List of shape IDs in desired order (back to front)
+
+    Returns:
+        True if order was set, False if any shape not found
+
+    Example:
+        >>> # Put shape 5 in front of shapes 3 and 4
+        >>> set_shape_order(pres, 1, [3, 4, 5])
+    """
+    slide = presentation.get_slide(slide_number)
+    shape_tree = slide._part.shape_tree
+
+    # Find all shapes by ID
+    new_order = []
+    for shape_id in shape_ids:
+        shape = shape_tree.get_shape_by_id(shape_id)
+        if shape is None:
+            return False
+        new_order.append(shape)
+
+    # Keep shapes not in the list in their relative order at the beginning
+    remaining = [s for s in shape_tree._shapes if s not in new_order]
+    shape_tree._shapes = remaining + new_order
+
+    slide._save()
+    return True

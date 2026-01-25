@@ -337,3 +337,257 @@ def add_text_box(
         bold=bold,
         color=color,
     )
+
+
+def set_notes(
+    presentation: Presentation,
+    slide_number: int,
+    text: str,
+) -> None:
+    """Set speaker notes for a slide.
+
+    Speaker notes appear in presenter view and are useful for
+    adding talking points, reminders, or detailed information.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        text: The notes text. Use newlines for multiple paragraphs.
+
+    Example:
+        >>> set_notes(pres, 1, "Welcome the audience and introduce the topic.")
+
+        >>> set_notes(pres, 2, '''Key talking points:
+        ... - Emphasize the 20% growth
+        ... - Mention new market expansion
+        ... - Highlight customer feedback''')
+    """
+    from ..oxml.notes import create_notes_slide
+
+    create_notes_slide(presentation._package, slide_number, text)
+    presentation._dirty = True
+
+
+def get_notes(
+    presentation: Presentation,
+    slide_number: int,
+) -> str:
+    """Get speaker notes from a slide.
+
+    Args:
+        presentation: The presentation to read from
+        slide_number: The slide number (1-indexed)
+
+    Returns:
+        The notes text, or empty string if no notes exist.
+
+    Example:
+        >>> notes = get_notes(pres, 1)
+        >>> if notes:
+        ...     print(f"Notes: {notes}")
+    """
+    from ..oxml.notes import get_notes_slide
+
+    notes_part = get_notes_slide(presentation._package, slide_number)
+    if notes_part:
+        return notes_part.get_text()
+    return ""
+
+
+def append_notes(
+    presentation: Presentation,
+    slide_number: int,
+    text: str,
+) -> None:
+    """Append text to existing speaker notes.
+
+    If the slide has no notes, creates new notes with the given text.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        text: Text to append to existing notes
+
+    Example:
+        >>> append_notes(pres, 1, "Additional point to mention.")
+    """
+    from ..oxml.notes import create_notes_slide, get_notes_slide
+
+    notes_part = get_notes_slide(presentation._package, slide_number)
+    if notes_part:
+        notes_part.append_text(text)
+        # Save the updated notes - recreate with full text
+        full_text = notes_part.get_text()
+        create_notes_slide(presentation._package, slide_number, full_text)
+    else:
+        create_notes_slide(presentation._package, slide_number, text)
+
+    presentation._dirty = True
+
+
+def find_text(
+    presentation: Presentation,
+    search_text: str,
+    *,
+    case_sensitive: bool = False,
+    whole_word: bool = False,
+) -> list[dict]:
+    """Find text in the presentation.
+
+    Searches through all slides and returns locations of matches.
+
+    Args:
+        presentation: The presentation to search
+        search_text: Text to find
+        case_sensitive: Match case exactly (default False)
+        whole_word: Match whole words only (default False)
+
+    Returns:
+        List of dicts with match information:
+        - slide: Slide number
+        - shape: Shape name
+        - text: The matched text with context
+
+    Example:
+        >>> matches = find_text(pres, "revenue")
+        >>> for m in matches:
+        ...     print(f"Slide {m['slide']}: {m['text']}")
+    """
+    import re
+
+    results = []
+
+    # Build regex pattern
+    pattern = search_text
+    if not case_sensitive:
+        pattern = f"(?i){pattern}"
+    if whole_word:
+        pattern = rf"\b{pattern}\b"
+
+    regex = re.compile(pattern)
+
+    for slide_num in range(1, presentation.slide_count + 1):
+        slide = presentation.get_slide(slide_num)
+
+        for shape in slide.shapes:
+            # Get text from shape
+            shape_text = ""
+            if hasattr(shape, "text_frame") and shape.text_frame:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        if run.text:
+                            shape_text += run.text
+
+            if shape_text and regex.search(shape_text):
+                # Find matches with context
+                for match in regex.finditer(shape_text):
+                    start = max(0, match.start() - 20)
+                    end = min(len(shape_text), match.end() + 20)
+                    context = shape_text[start:end]
+                    if start > 0:
+                        context = "..." + context
+                    if end < len(shape_text):
+                        context = context + "..."
+
+                    results.append({
+                        "slide": slide_num,
+                        "shape": shape.name,
+                        "text": context,
+                        "match": match.group(),
+                    })
+
+    return results
+
+
+def replace_text(
+    presentation: Presentation,
+    old_text: str,
+    new_text: str,
+    *,
+    case_sensitive: bool = False,
+    whole_word: bool = False,
+) -> int:
+    """Replace text throughout the presentation.
+
+    Args:
+        presentation: The presentation to modify
+        old_text: Text to find and replace
+        new_text: Replacement text
+        case_sensitive: Match case exactly (default False)
+        whole_word: Match whole words only (default False)
+
+    Returns:
+        Number of replacements made
+
+    Example:
+        >>> count = replace_text(pres, "2023", "2024")
+        >>> print(f"Replaced {count} occurrences")
+    """
+    import re
+
+    # Build regex pattern
+    pattern = re.escape(old_text)
+    if not case_sensitive:
+        pattern = f"(?i){pattern}"
+    if whole_word:
+        pattern = rf"\b{pattern}\b"
+
+    regex = re.compile(pattern)
+    total_replacements = 0
+
+    for slide_num in range(1, presentation.slide_count + 1):
+        slide = presentation.get_slide(slide_num)
+        slide_modified = False
+
+        for shape in slide.shapes:
+            if hasattr(shape, "text_frame") and shape.text_frame:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        if run.text and regex.search(run.text):
+                            new_run_text, count = regex.subn(new_text, run.text)
+                            if count > 0:
+                                run.text = new_run_text
+                                total_replacements += count
+                                slide_modified = True
+
+        if slide_modified:
+            slide._save()
+
+    return total_replacements
+
+
+def replace_all(
+    presentation: Presentation,
+    replacements: dict[str, str],
+    *,
+    case_sensitive: bool = False,
+) -> dict[str, int]:
+    """Replace multiple text strings at once.
+
+    More efficient than calling replace_text multiple times.
+
+    Args:
+        presentation: The presentation to modify
+        replacements: Dict mapping old text to new text
+        case_sensitive: Match case exactly (default False)
+
+    Returns:
+        Dict mapping each old text to number of replacements made
+
+    Example:
+        >>> counts = replace_all(pres, {
+        ...     "Company Name": "Acme Corp",
+        ...     "2023": "2024",
+        ...     "Q3": "Q4",
+        ... })
+        >>> for old, count in counts.items():
+        ...     print(f"Replaced '{old}' {count} times")
+    """
+    results = {}
+    for old_text, new_text in replacements.items():
+        count = replace_text(
+            presentation, old_text, new_text,
+            case_sensitive=case_sensitive
+        )
+        results[old_text] = count
+    return results
