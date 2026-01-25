@@ -135,6 +135,9 @@ from .tools.presentation import (
     set_slide_size_preset,
 )
 from .tools.shapes import (
+    add_3d_depth,
+    add_3d_rotation,
+    add_bevel,
     add_connector,
     add_glow,
     add_reflection,
@@ -143,9 +146,11 @@ from .tools.shapes import (
     bring_forward,
     bring_to_front,
     delete_shape,
+    get_3d_presets,
     get_shape_order,
     group_shapes,
     move_shape,
+    remove_3d_effects,
     remove_effects,
     resize_shape,
     send_backward,
@@ -321,6 +326,12 @@ __all__ = [
     "add_glow",
     "add_reflection",
     "remove_effects",
+    # 3D effects
+    "add_3d_rotation",
+    "add_3d_depth",
+    "add_bevel",
+    "remove_3d_effects",
+    "get_3d_presets",
 
     # Theme tools
     "set_theme_color",

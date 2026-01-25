@@ -1065,3 +1065,335 @@ def remove_effects(
 
     _save_slide_element_directly(presentation._package, slide_number, slide_elem)
     return True
+
+
+# ============================================================================
+# 3D Effects
+# ============================================================================
+
+
+def add_3d_rotation(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    lat: int = 0,
+    lon: int = 0,
+    rev: int = 0,
+    preset: str | None = None,
+) -> bool:
+    """Add 3D rotation to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to rotate
+        lat: Latitude rotation (x-axis) in degrees (-90 to 90)
+        lon: Longitude rotation (y-axis) in degrees (-180 to 180)
+        rev: Revolution rotation (z-axis) in degrees (0 to 360)
+        preset: Camera preset name (overrides lat/lon/rev). Use get_3d_presets()
+                for available options. Common: "isometricLeftDown", "perspectiveLeft"
+
+    Returns:
+        True if rotation applied, False if shape not found
+
+    Example:
+        >>> # Custom rotation
+        >>> add_3d_rotation(pres, 1, shape_id, lat=20, lon=30)
+        >>> # Preset rotation
+        >>> add_3d_rotation(pres, 1, shape_id, preset="isometricLeftDown")
+    """
+    from lxml import etree
+
+    from ..oxml.effects3d import CAMERA_PRESETS
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Remove existing scene3d
+    scene3d = sp_pr.find(qn("a:scene3d"))
+    if scene3d is not None:
+        sp_pr.remove(scene3d)
+
+    # Create new scene3d
+    scene3d = etree.SubElement(sp_pr, qn("a:scene3d"))
+
+    # Create camera
+    camera = etree.SubElement(scene3d, qn("a:camera"))
+
+    if preset and preset in CAMERA_PRESETS:
+        camera.set("prst", preset)
+    else:
+        camera.set("prst", "orthographicFront")
+        # Add rotation
+        if lat != 0 or lon != 0 or rev != 0:
+            rot = etree.SubElement(camera, qn("a:rot"))
+            rot.set("lat", str(lat * 60000))
+            rot.set("lon", str(lon * 60000))
+            rot.set("rev", str(rev * 60000))
+
+    # Add light rig
+    light_rig = etree.SubElement(scene3d, qn("a:lightRig"))
+    light_rig.set("rig", "threePt")
+    light_rig.set("dir", "t")
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def add_3d_depth(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    depth: str | int = "10pt",
+    color: str | None = None,
+    *,
+    contour_width: str | int = 0,
+    contour_color: str | None = None,
+) -> bool:
+    """Add 3D extrusion depth to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to extrude
+        depth: Extrusion depth (e.g., "10pt", "0.5in", or EMUs as int)
+        color: Extrusion color as hex (None for auto)
+        contour_width: Contour line width
+        contour_color: Contour line color as hex
+
+    Returns:
+        True if depth applied, False if shape not found
+
+    Example:
+        >>> add_3d_depth(pres, 1, shape_id, "20pt", color="#0066CC")
+        >>> add_3d_depth(pres, 1, shape_id, "0.25in", contour_width="1pt", contour_color="#000000")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Parse depth
+    depth_emu = int(parse_length(depth)) if isinstance(depth, str) else depth
+
+    # Parse contour width
+    contour_emu = int(parse_length(contour_width)) if isinstance(contour_width, str) else contour_width
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Remove existing sp3d
+    sp3d = sp_pr.find(qn("a:sp3d"))
+    if sp3d is not None:
+        sp_pr.remove(sp3d)
+
+    # Create new sp3d
+    sp3d = etree.SubElement(sp_pr, qn("a:sp3d"))
+
+    if depth_emu > 0:
+        sp3d.set("extrusionH", str(depth_emu))
+
+    if contour_emu > 0:
+        sp3d.set("contourW", str(contour_emu))
+
+    # Add extrusion color
+    if depth_emu > 0 and color:
+        extrusion_clr = etree.SubElement(sp3d, qn("a:extrusionClr"))
+        srgb = etree.SubElement(extrusion_clr, qn("a:srgbClr"))
+        srgb.set("val", color.lstrip("#").upper())
+
+    # Add contour color
+    if contour_emu > 0 and contour_color:
+        contour_clr = etree.SubElement(sp3d, qn("a:contourClr"))
+        srgb = etree.SubElement(contour_clr, qn("a:srgbClr"))
+        srgb.set("val", contour_color.lstrip("#").upper())
+
+    # Ensure scene3d exists for 3D to render
+    scene3d = sp_pr.find(qn("a:scene3d"))
+    if scene3d is None:
+        scene3d = etree.SubElement(sp_pr, qn("a:scene3d"))
+        camera = etree.SubElement(scene3d, qn("a:camera"))
+        camera.set("prst", "orthographicFront")
+        light_rig = etree.SubElement(scene3d, qn("a:lightRig"))
+        light_rig.set("rig", "threePt")
+        light_rig.set("dir", "t")
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def add_bevel(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    bevel_type: str = "circle",
+    width: str | int = "6pt",
+    height: str | int = "6pt",
+    top: bool = True,
+    bottom: bool = False,
+) -> bool:
+    """Add bevel effect to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to bevel
+        bevel_type: Bevel type preset. Options:
+            - "angle", "artDeco", "circle" (default), "convex"
+            - "coolSlant", "cross", "divot", "hardEdge"
+            - "relaxedInset", "riblet", "slope", "softRound"
+        width: Bevel width (e.g., "6pt")
+        height: Bevel height (e.g., "6pt")
+        top: Apply bevel to top (default True)
+        bottom: Apply bevel to bottom (default False)
+
+    Returns:
+        True if bevel applied, False if shape not found
+
+    Example:
+        >>> add_bevel(pres, 1, shape_id, bevel_type="circle", width="8pt")
+        >>> add_bevel(pres, 1, shape_id, bevel_type="softRound", top=True, bottom=True)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Parse dimensions
+    width_emu = int(parse_length(width)) if isinstance(width, str) else width
+    height_emu = int(parse_length(height)) if isinstance(height, str) else height
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Find or create sp3d
+    sp3d = sp_pr.find(qn("a:sp3d"))
+    if sp3d is None:
+        sp3d = etree.SubElement(sp_pr, qn("a:sp3d"))
+
+    # Remove existing bevels
+    for bevel_elem in sp3d.findall(qn("a:bevelT")):
+        sp3d.remove(bevel_elem)
+    for bevel_elem in sp3d.findall(qn("a:bevelB")):
+        sp3d.remove(bevel_elem)
+
+    # Add top bevel
+    if top:
+        bevel_t = etree.SubElement(sp3d, qn("a:bevelT"))
+        bevel_t.set("prst", bevel_type)
+        bevel_t.set("w", str(width_emu))
+        bevel_t.set("h", str(height_emu))
+
+    # Add bottom bevel
+    if bottom:
+        bevel_b = etree.SubElement(sp3d, qn("a:bevelB"))
+        bevel_b.set("prst", bevel_type)
+        bevel_b.set("w", str(width_emu))
+        bevel_b.set("h", str(height_emu))
+
+    # Ensure scene3d exists for 3D to render
+    scene3d = sp_pr.find(qn("a:scene3d"))
+    if scene3d is None:
+        scene3d = etree.SubElement(sp_pr, qn("a:scene3d"))
+        camera = etree.SubElement(scene3d, qn("a:camera"))
+        camera.set("prst", "orthographicFront")
+        light_rig = etree.SubElement(scene3d, qn("a:lightRig"))
+        light_rig.set("rig", "threePt")
+        light_rig.set("dir", "t")
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def remove_3d_effects(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Remove all 3D effects from a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to remove 3D effects from
+
+    Returns:
+        True if effects removed, False if shape not found
+
+    Example:
+        >>> remove_3d_effects(pres, 1, shape_id)
+    """
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        return True  # No 3D effects to remove
+
+    # Remove scene3d
+    scene3d = sp_pr.find(qn("a:scene3d"))
+    if scene3d is not None:
+        sp_pr.remove(scene3d)
+
+    # Remove sp3d
+    sp3d = sp_pr.find(qn("a:sp3d"))
+    if sp3d is not None:
+        sp_pr.remove(sp3d)
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def get_3d_presets() -> list[str]:
+    """Get available 3D camera preset names.
+
+    Returns:
+        List of preset names for use with add_3d_rotation()
+
+    Example:
+        >>> presets = get_3d_presets()
+        >>> # Use an isometric preset
+        >>> add_3d_rotation(pres, 1, shape_id, preset="isometricLeftDown")
+    """
+    from ..oxml.effects3d import CAMERA_PRESETS
+
+    return CAMERA_PRESETS.copy()
