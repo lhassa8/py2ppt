@@ -1,4 +1,4 @@
-"""aipptx: AI-Friendly PowerPoint Wrapper.
+"""py2ppt: AI-Friendly PowerPoint Wrapper.
 
 A high-level, AI-native wrapper for creating PowerPoint presentations
 from corporate templates with semantic, intent-based APIs.
@@ -11,7 +11,7 @@ Features:
 - High-level slide creation methods
 
 Quick Start:
-    >>> from aipptx import Template
+    >>> from py2ppt import Template
     >>>
     >>> # Load and analyze a template
     >>> template = Template("corporate.pptx")

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation as PptxPresentation
 
-from aipptx import Template
+from py2ppt import Template
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ class TestTemplate:
         template = Template(blank_template)
         pres = template.create_presentation()
 
-        from aipptx import Presentation
+        from py2ppt import Presentation
         assert isinstance(pres, Presentation)
         assert pres.slide_count == 0  # Template slides are removed
 

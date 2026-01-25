@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation as PptxPresentation
 
-from aipptx import Template, Presentation
+from py2ppt import Template, Presentation
 
 
 @pytest.fixture

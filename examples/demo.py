@@ -1,13 +1,13 @@
-"""Demo: AI-Friendly PowerPoint Wrapper (aipptx)
+"""Demo: AI-Friendly PowerPoint Wrapper (py2ppt)
 
-This example shows how to use the aipptx wrapper to create
+This example shows how to use the py2ppt wrapper to create
 professional PowerPoint presentations from corporate templates
 with AI-friendly, semantic APIs.
 """
 
 from pathlib import Path
 
-from aipptx import Template
+from py2ppt import Template
 
 # Path to template (use your corporate template)
 TEMPLATE_PATH = Path(__file__).parent.parent / "AWStempate.pptx"

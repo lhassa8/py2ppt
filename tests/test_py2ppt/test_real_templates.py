@@ -1,7 +1,7 @@
 """Tests with real templates.
 
 This file contains integration tests that use real PowerPoint templates
-to verify the aipptx wrapper works correctly end-to-end.
+to verify the py2ppt wrapper works correctly end-to-end.
 """
 
 import json
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation as PptxPresentation
 
-from aipptx import Template
+from py2ppt import Template
 
 
 class TestAWSTemplate:
