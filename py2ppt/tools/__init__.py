@@ -127,6 +127,14 @@ from .slides import (
 from .style import (
     set_text_style,
 )
+from .masters import (
+    add_logo_to_master,
+    get_layout_info,
+    get_master_placeholders,
+    get_slide_masters,
+    set_master_background,
+    set_master_font,
+)
 from .theme import (
     apply_theme_colors,
     get_theme_info,
@@ -265,4 +273,11 @@ __all__ = [
     "export_slide_to_image",
     "export_all_slides",
     "check_export_dependencies",
+    # Master slide tools
+    "get_slide_masters",
+    "get_master_placeholders",
+    "set_master_background",
+    "set_master_font",
+    "get_layout_info",
+    "add_logo_to_master",
 ]

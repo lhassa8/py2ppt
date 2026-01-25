@@ -96,6 +96,14 @@ from .tools.inspection import (
     list_layouts,
     save_slide_thumbnail,
 )
+from .tools.masters import (
+    add_logo_to_master,
+    get_layout_info,
+    get_master_placeholders,
+    get_slide_masters,
+    set_master_background,
+    set_master_font,
+)
 from .tools.media import (
     add_audio,
     add_chart,
@@ -337,6 +345,14 @@ __all__ = [
     "export_slide_to_image",
     "export_all_slides",
     "check_export_dependencies",
+
+    # Master slide tools
+    "get_slide_masters",
+    "get_master_placeholders",
+    "set_master_background",
+    "set_master_font",
+    "get_layout_info",
+    "add_logo_to_master",
 
     # Units
     "Inches",
