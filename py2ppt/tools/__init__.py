@@ -106,12 +106,15 @@ from .shapes import (
     set_shape_order,
 )
 from .slides import (
+    add_comment,
     add_section,
     add_slide,
     clear_slide_background,
+    delete_comment,
     delete_section,
     delete_slide,
     duplicate_slide,
+    get_comments,
     get_sections,
     rename_section,
     reorder_slides,
@@ -155,6 +158,10 @@ __all__ = [
     "get_sections",
     "rename_section",
     "delete_section",
+    # Comments
+    "add_comment",
+    "get_comments",
+    "delete_comment",
     # Content tools
     "set_title",
     "set_subtitle",

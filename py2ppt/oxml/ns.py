@@ -132,6 +132,8 @@ class REL_TYPE:
     VIDEO = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video"
     AUDIO = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio"
     MEDIA = "http://schemas.microsoft.com/office/2007/relationships/media"
+    COMMENTS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+    COMMENT_AUTHORS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors"
 
 
 # Content types

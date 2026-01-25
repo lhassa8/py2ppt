@@ -615,3 +615,326 @@ def delete_section(
                 return True
 
     return False
+
+
+# ============================================================================
+# Comments
+# ============================================================================
+
+
+def add_comment(
+    presentation: Presentation,
+    slide_number: int,
+    text: str,
+    author: str = "Anonymous",
+    *,
+    left: str | int = "1in",
+    top: str | int = "1in",
+) -> int:
+    """Add a comment to a slide.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        text: Comment text
+        author: Comment author name
+        left: Horizontal position (e.g., "1in", "2.5cm", or EMU value)
+        top: Vertical position
+
+    Returns:
+        Comment ID
+
+    Example:
+        >>> comment_id = add_comment(pres, 1, "Please review this slide", "John Smith")
+    """
+    from datetime import datetime
+
+    from ..oxml.comments import (
+        COMMENT_AUTHORS_CONTENT_TYPE,
+        COMMENT_CONTENT_TYPE,
+        Comment,
+        CommentAuthor,
+        create_comment_authors_xml,
+        create_comments_xml,
+        get_author_initials,
+        parse_comment_authors,
+        parse_comments,
+    )
+    from ..oxml.ns import REL_TYPE
+    from ..utils.units import parse_length
+
+    pkg = presentation._package
+
+    # Get/create comment authors
+    authors_xml = pkg.get_part("ppt/commentAuthors.xml")
+    authors = parse_comment_authors(authors_xml) if authors_xml else []
+
+    # Find or create author
+    author_id = None
+    for a in authors:
+        if a.name == author:
+            author_id = a.id
+            break
+
+    if author_id is None:
+        # Create new author
+        author_id = len(authors)
+        new_author = CommentAuthor(
+            id=author_id,
+            name=author,
+            initials=get_author_initials(author),
+            last_idx=0,
+            clr_idx=author_id % 8,
+        )
+        authors.append(new_author)
+
+    # Update last_idx for author
+    for a in authors:
+        if a.id == author_id:
+            a.last_idx += 1
+            comment_idx = a.last_idx
+            break
+
+    # Save authors
+    pkg.set_part(
+        "ppt/commentAuthors.xml",
+        create_comment_authors_xml(authors),
+        COMMENT_AUTHORS_CONTENT_TYPE,
+    )
+
+    # Get slide refs to find comment file path
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return -1
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    # Determine comment file for this slide
+    slide_rels = pkg.get_part_rels(slide_path)
+    comment_path = None
+
+    # Look for existing comment relationship
+    comment_rels = slide_rels.find_by_type(REL_TYPE.COMMENTS)
+    if comment_rels:
+        r = comment_rels[0]
+        comment_path = r.target
+        if not comment_path.startswith("ppt/"):
+            # Relative path - remove leading ../
+            while comment_path.startswith("../"):
+                comment_path = comment_path[3:]
+            comment_path = f"ppt/{comment_path}"
+
+    if comment_path is None:
+        # Create new comment file
+        # Find next available comment number
+        existing_comments = [
+            name for name, _ in pkg.iter_parts()
+            if name.startswith("ppt/comments/comment")
+        ]
+        comment_num = len(existing_comments) + 1
+        comment_path = f"ppt/comments/comment{comment_num}.xml"
+
+        # Add relationship
+        slide_rels.add(
+            rel_type=REL_TYPE.COMMENTS,
+            target=f"../comments/comment{comment_num}.xml",
+        )
+        pkg.set_part_rels(slide_path, slide_rels)
+
+    # Get existing comments or create empty list
+    comment_xml = pkg.get_part(comment_path)
+    comments = parse_comments(comment_xml) if comment_xml else []
+
+    # Parse position
+    x = int(parse_length(left)) if isinstance(left, str) else left
+    y = int(parse_length(top)) if isinstance(top, str) else top
+
+    # Create new comment
+    new_comment = Comment(
+        id=comment_idx,
+        author_id=author_id,
+        text=text,
+        date=datetime.now(),
+        x=x,
+        y=y,
+    )
+    comments.append(new_comment)
+
+    # Save comments
+    pkg.set_part(comment_path, create_comments_xml(comments), COMMENT_CONTENT_TYPE)
+    presentation._dirty = True
+
+    return comment_idx
+
+
+def get_comments(
+    presentation: Presentation,
+    slide_number: int,
+) -> list[dict]:
+    """Get all comments on a slide.
+
+    Args:
+        presentation: The presentation to inspect
+        slide_number: The slide number (1-indexed)
+
+    Returns:
+        List of comment dicts with:
+        - id: Comment ID
+        - author: Author name
+        - text: Comment text
+        - date: ISO date string
+        - left: X position in EMUs
+        - top: Y position in EMUs
+
+    Example:
+        >>> comments = get_comments(pres, 1)
+        >>> for c in comments:
+        ...     print(f"{c['author']}: {c['text']}")
+    """
+    from ..oxml.comments import parse_comment_authors, parse_comments
+    from ..oxml.ns import REL_TYPE
+
+    pkg = presentation._package
+
+    # Get comment authors
+    authors_xml = pkg.get_part("ppt/commentAuthors.xml")
+    authors = parse_comment_authors(authors_xml) if authors_xml else []
+
+    # Build author name lookup
+    author_names = {a.id: a.name for a in authors}
+
+    # Get slide path
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return []
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    # Find comment file
+    slide_rels = pkg.get_part_rels(slide_path)
+    comment_path = None
+
+    comment_rels = slide_rels.find_by_type(REL_TYPE.COMMENTS)
+    if comment_rels:
+        r = comment_rels[0]
+        comment_path = r.target
+        if not comment_path.startswith("ppt/"):
+            # Relative path - remove leading ../
+            while comment_path.startswith("../"):
+                comment_path = comment_path[3:]
+            comment_path = f"ppt/{comment_path}"
+
+    if comment_path is None:
+        return []
+
+    # Get comments
+    comment_xml = pkg.get_part(comment_path)
+    if not comment_xml:
+        return []
+
+    comments = parse_comments(comment_xml)
+
+    return [
+        {
+            "id": c.id,
+            "author": author_names.get(c.author_id, "Unknown"),
+            "text": c.text,
+            "date": c.date.isoformat(),
+            "left": c.x,
+            "top": c.y,
+        }
+        for c in comments
+    ]
+
+
+def delete_comment(
+    presentation: Presentation,
+    slide_number: int,
+    comment_id: int,
+) -> bool:
+    """Delete a comment from a slide.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        comment_id: The comment ID to delete
+
+    Returns:
+        True if deleted, False if not found
+
+    Example:
+        >>> delete_comment(pres, 1, comment_id=2)
+    """
+    from ..oxml.comments import (
+        COMMENT_CONTENT_TYPE,
+        create_comments_xml,
+        parse_comments,
+    )
+    from ..oxml.ns import REL_TYPE
+
+    pkg = presentation._package
+
+    # Get slide path
+    slide_refs = presentation._presentation.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    # Find comment file
+    slide_rels = pkg.get_part_rels(slide_path)
+    comment_path = None
+
+    comment_rels = slide_rels.find_by_type(REL_TYPE.COMMENTS)
+    if comment_rels:
+        r = comment_rels[0]
+        comment_path = r.target
+        if not comment_path.startswith("ppt/"):
+            # Relative path - remove leading ../
+            while comment_path.startswith("../"):
+                comment_path = comment_path[3:]
+            comment_path = f"ppt/{comment_path}"
+
+    if comment_path is None:
+        return False
+
+    # Get comments
+    comment_xml = pkg.get_part(comment_path)
+    if not comment_xml:
+        return False
+
+    comments = parse_comments(comment_xml)
+
+    # Find and remove comment
+    original_count = len(comments)
+    comments = [c for c in comments if c.id != comment_id]
+
+    if len(comments) == original_count:
+        return False  # Comment not found
+
+    # Save updated comments
+    pkg.set_part(comment_path, create_comments_xml(comments), COMMENT_CONTENT_TYPE)
+    presentation._dirty = True
+
+    return True
