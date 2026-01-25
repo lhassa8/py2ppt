@@ -4,19 +4,18 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from pptx import Presentation as PptxPresentation
 
 from aipptx import Template
-import py2ppt
 
 
 @pytest.fixture
 def blank_template(tmp_path: Path) -> Path:
     """Create a blank presentation to use as template."""
     template_path = tmp_path / "template.pptx"
-    pres = py2ppt.create_presentation()
-    # Add a slide so we have content
-    py2ppt.add_slide(pres, layout=0)
-    py2ppt.save_presentation(pres, str(template_path))
+    pres = PptxPresentation()
+    pres.slides.add_slide(pres.slide_layouts[0])
+    pres.save(str(template_path))
     return template_path
 
 

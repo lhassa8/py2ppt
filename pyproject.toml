@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "py2ppt"
+name = "aipptx"
 version = "0.1.0"
-description = "AI-Native PowerPoint Library for Python"
+description = "AI-Friendly PowerPoint Wrapper"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "lxml>=4.9.0",
+    "python-pptx>=0.6.21",
 ]
 
 [project.optional-dependencies]
@@ -41,7 +41,7 @@ images = [
     "Pillow>=9.0",
 ]
 all = [
-    "py2ppt[dev,images]",
+    "aipptx[dev,images]",
 ]
 
 [project.urls]
@@ -53,7 +53,7 @@ Changelog = "https://github.com/lhassa8/py2ppt/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["py2ppt*"]
+include = ["aipptx*"]
 
 # ============================================================
 # Testing
@@ -69,7 +69,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["py2ppt"]
+source = ["aipptx"]
 omit = ["tests/*", "**/__pycache__/*"]
 branch = true
 
@@ -125,7 +125,7 @@ ignore = [
 "examples/*" = ["ARG"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["py2ppt"]
+known-first-party = ["aipptx"]
 
 [tool.ruff.format]
 quote-style = "double"

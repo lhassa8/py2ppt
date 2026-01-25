@@ -9,6 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pptx import Presentation as PptxPresentation
+from pptx.util import Inches, Pt
+from pptx.enum.shapes import PP_PLACEHOLDER
+
 from .formatting import format_for_py2ppt, parse_content
 from .layout import LayoutType
 
@@ -19,7 +23,7 @@ if TYPE_CHECKING:
 class Presentation:
     """AI-friendly presentation with semantic slide methods.
 
-    This class wraps py2ppt's Presentation to provide high-level,
+    This class wraps python-pptx's Presentation to provide high-level,
     intent-based methods for creating slides. Instead of dealing
     with placeholder indices and layout details, you can simply
     call methods like add_title_slide() or add_comparison_slide().
@@ -45,15 +49,19 @@ class Presentation:
         self._template = template
         self._layouts = template._layouts
 
-        # Create py2ppt presentation from template
-        from py2ppt.core.presentation import Presentation as Py2PptPresentation
+        # Create python-pptx presentation from template
+        self._pptx = PptxPresentation(template.path)
 
-        self._pres = Py2PptPresentation.from_template(template.path)
+        # Remove existing slides (keep only layouts/masters)
+        while len(self._pptx.slides) > 0:
+            rId = self._pptx.slides._sldIdLst[0].rId
+            self._pptx.part.drop_rel(rId)
+            del self._pptx.slides._sldIdLst[0]
 
     @property
     def slide_count(self) -> int:
         """Get the current number of slides."""
-        return self._pres.slide_count
+        return len(self._pptx.slides)
 
     @property
     def template(self) -> "Template":
@@ -83,6 +91,52 @@ class Presentation:
                 return l.index
         return self._find_layout_by_type(layout_type)
 
+    def _get_placeholder(self, slide, ph_type):
+        """Get a placeholder by type from a slide."""
+        for shape in slide.placeholders:
+            if shape.placeholder_format.type == ph_type:
+                return shape
+        return None
+
+    def _set_text_frame(self, shape, text: str) -> None:
+        """Set text in a shape's text frame."""
+        if shape is None:
+            return
+        tf = shape.text_frame
+        tf.clear()
+        p = tf.paragraphs[0]
+        p.text = text
+
+    def _set_body_content(self, shape, content: list, levels: list[int] | None = None) -> None:
+        """Set bullet content in a body placeholder."""
+        if shape is None:
+            return
+
+        tf = shape.text_frame
+        tf.clear()
+
+        for i, item in enumerate(content):
+            if i == 0:
+                p = tf.paragraphs[0]
+            else:
+                p = tf.add_paragraph()
+
+            # Set level
+            if levels and i < len(levels):
+                p.level = levels[i]
+
+            # Set text
+            if isinstance(item, str):
+                p.text = item
+            elif isinstance(item, list):
+                # Rich text - just use plain text for now
+                p.text = "".join(
+                    seg.get("text", "") if isinstance(seg, dict) else str(seg)
+                    for seg in item
+                )
+            elif isinstance(item, dict):
+                p.text = item.get("text", "")
+
     def add_title_slide(
         self,
         title: str,
@@ -104,19 +158,21 @@ class Presentation:
             >>> pres.add_title_slide("Q4 Business Review", "January 2025")
         """
         layout_idx = self._find_layout(layout, LayoutType.TITLE)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
         # Set title
-        import py2ppt
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        if title_ph is None:
+            title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.CENTER_TITLE)
+        self._set_text_frame(title_ph, title)
 
-        py2ppt.set_title(self._pres, slide_num, title)
-
-        # Set subtitle if provided
+        # Set subtitle
         if subtitle:
-            py2ppt.set_subtitle(self._pres, slide_num, subtitle)
+            subtitle_ph = self._get_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
+            self._set_text_frame(subtitle_ph, subtitle)
 
-        return slide_num
+        return len(self._pptx.slides)
 
     def add_section_slide(
         self,
@@ -139,21 +195,20 @@ class Presentation:
             >>> pres.add_section_slide("Part 2: Analysis")
         """
         layout_idx = self._find_layout(layout, LayoutType.SECTION)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
-        import py2ppt
+        # Set title
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        self._set_text_frame(title_ph, title)
 
-        py2ppt.set_title(self._pres, slide_num, title)
-
+        # Set subtitle if provided
         if subtitle:
-            try:
-                py2ppt.set_subtitle(self._pres, slide_num, subtitle)
-            except Exception:
-                # Section layouts may not have subtitle placeholder
-                pass
+            subtitle_ph = self._get_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
+            if subtitle_ph:
+                self._set_text_frame(subtitle_ph, subtitle)
 
-        return slide_num
+        return len(self._pptx.slides)
 
     def add_content_slide(
         self,
@@ -189,28 +244,26 @@ class Presentation:
             ...     "Sub-point 2",
             ...     "Another main topic"
             ... ], levels=[0, 1, 1, 0])
-
-            >>> # Rich text
-            >>> pres.add_content_slide("Important", [
-            ...     [{"text": "Key: ", "bold": True}, {"text": "value"}],
-            ...     "Normal bullet"
-            ... ])
         """
         layout_idx = self._find_layout(layout, LayoutType.CONTENT)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
-        import py2ppt
-
-        py2ppt.set_title(self._pres, slide_num, title)
+        # Set title
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        self._set_text_frame(title_ph, title)
 
         # Parse and format content
         paragraphs = parse_content(content, levels)
         formatted_content, formatted_levels = format_for_py2ppt(paragraphs)
 
-        py2ppt.set_body(self._pres, slide_num, formatted_content, levels=formatted_levels)
+        # Set body
+        body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.BODY)
+        if body_ph is None:
+            body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.OBJECT)
+        self._set_body_content(body_ph, formatted_content, formatted_levels)
 
-        return slide_num
+        return len(self._pptx.slides)
 
     def add_two_column_slide(
         self,
@@ -243,12 +296,19 @@ class Presentation:
             ... )
         """
         layout_idx = self._find_layout(layout, LayoutType.TWO_COLUMN)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
-        import py2ppt
+        # Set title
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        self._set_text_frame(title_ph, title)
 
-        py2ppt.set_title(self._pres, slide_num, title)
+        # Find body placeholders (there should be two)
+        body_phs = [
+            shape for shape in slide.placeholders
+            if shape.placeholder_format.type in (PP_PLACEHOLDER.BODY, PP_PLACEHOLDER.OBJECT)
+        ]
+        body_phs.sort(key=lambda s: s.left)  # Sort by x position
 
         # Format content
         left_paragraphs = parse_content(left_content, left_levels)
@@ -257,24 +317,15 @@ class Presentation:
         right_paragraphs = parse_content(right_content, right_levels)
         right_formatted, right_lvls = format_for_py2ppt(right_paragraphs)
 
-        # Set left content (body_1 or first body placeholder)
-        try:
-            py2ppt.set_placeholder_text(
-                self._pres, slide_num, "body_1", "\n".join(str(c) for c in left_formatted)
-            )
-        except Exception:
-            # Try setting via set_body which targets first body
-            py2ppt.set_body(self._pres, slide_num, left_formatted, levels=left_lvls)
+        # Set left content
+        if len(body_phs) >= 1:
+            self._set_body_content(body_phs[0], left_formatted, left_lvls)
 
-        # Set right content (body_2)
-        try:
-            py2ppt.set_placeholder_text(
-                self._pres, slide_num, "body_2", "\n".join(str(c) for c in right_formatted)
-            )
-        except Exception:
-            pass  # Layout may not support second body
+        # Set right content
+        if len(body_phs) >= 2:
+            self._set_body_content(body_phs[1], right_formatted, right_lvls)
 
-        return slide_num
+        return len(self._pptx.slides)
 
     def add_comparison_slide(
         self,
@@ -312,46 +363,37 @@ class Presentation:
         """
         # Try to find a comparison layout, fall back to two-column
         layout_idx = self._find_layout(layout, LayoutType.COMPARISON)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
-        import py2ppt
+        # Set title
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        self._set_text_frame(title_ph, title)
 
-        py2ppt.set_title(self._pres, slide_num, title)
+        # Find body placeholders
+        body_phs = [
+            shape for shape in slide.placeholders
+            if shape.placeholder_format.type in (PP_PLACEHOLDER.BODY, PP_PLACEHOLDER.OBJECT)
+        ]
+        # Sort by position: top row first, then left to right
+        body_phs.sort(key=lambda s: (s.top, s.left))
 
-        # Get placeholders to understand the layout
-        # get_placeholders returns dict[str, str] mapping type to content
-        placeholders = py2ppt.get_placeholders(self._pres, slide_num)
+        if len(body_phs) >= 4:
+            # True comparison layout: heading, content, heading, content
+            self._set_text_frame(body_phs[0], left_heading)
+            left_paragraphs = parse_content(left_content)
+            left_formatted, left_lvls = format_for_py2ppt(left_paragraphs)
+            self._set_body_content(body_phs[2], left_formatted, left_lvls)
 
-        # Count body placeholders
-        body_ph_count = sum(1 for k in placeholders.keys() if "body" in k.lower())
+            self._set_text_frame(body_phs[1], right_heading)
+            right_paragraphs = parse_content(right_content)
+            right_formatted, right_lvls = format_for_py2ppt(right_paragraphs)
+            self._set_body_content(body_phs[3], right_formatted, right_lvls)
 
-        if body_ph_count >= 4:
-            # True comparison layout with 4 body placeholders
-            try:
-                py2ppt.set_placeholder_text(self._pres, slide_num, "body_1", left_heading)
-                left_paragraphs = parse_content(left_content)
-                left_formatted, _ = format_for_py2ppt(left_paragraphs)
-                left_text = "\n".join(
-                    c if isinstance(c, str) else (c[0]["text"] if isinstance(c, list) else str(c))
-                    for c in left_formatted
-                )
-                py2ppt.set_placeholder_text(self._pres, slide_num, "body_2", left_text)
-
-                py2ppt.set_placeholder_text(self._pres, slide_num, "body_3", right_heading)
-                right_paragraphs = parse_content(right_content)
-                right_formatted, _ = format_for_py2ppt(right_paragraphs)
-                right_text = "\n".join(
-                    c if isinstance(c, str) else (c[0]["text"] if isinstance(c, list) else str(c))
-                    for c in right_formatted
-                )
-                py2ppt.set_placeholder_text(self._pres, slide_num, "body_4", right_text)
-            except Exception:
-                pass
-        elif body_ph_count >= 2:
+        elif len(body_phs) >= 2:
             # Two-column layout - combine heading with content
-            left_combined = [{"text": left_heading, "bold": True}] + list(left_content)
-            right_combined = [{"text": right_heading, "bold": True}] + list(right_content)
+            left_combined = [left_heading] + list(left_content)
+            right_combined = [right_heading] + list(right_content)
 
             left_levels = [0] + [1] * len(left_content)
             right_levels = [0] + [1] * len(right_content)
@@ -362,32 +404,28 @@ class Presentation:
             left_formatted, left_lvls = format_for_py2ppt(left_paragraphs)
             right_formatted, right_lvls = format_for_py2ppt(right_paragraphs)
 
-            try:
-                py2ppt.set_placeholder_text(
-                    self._pres, slide_num, "body_1",
-                    "\n".join(c if isinstance(c, str) else str(c) for c in left_formatted)
-                )
-                py2ppt.set_placeholder_text(
-                    self._pres, slide_num, "body_2",
-                    "\n".join(c if isinstance(c, str) else str(c) for c in right_formatted)
-                )
-            except Exception:
-                pass
-        else:
-            # Single body placeholder - combine all content
-            combined = [
-                f"**{left_heading}**",
-                *[f"  - {c}" if isinstance(c, str) else str(c) for c in left_content],
-                "",
-                f"**{right_heading}**",
-                *[f"  - {c}" if isinstance(c, str) else str(c) for c in right_content],
-            ]
-            try:
-                py2ppt.set_body(self._pres, slide_num, combined)
-            except Exception:
-                pass
+            # Sort by x position for left/right
+            body_phs.sort(key=lambda s: s.left)
+            self._set_body_content(body_phs[0], left_formatted, left_lvls)
+            self._set_body_content(body_phs[1], right_formatted, right_lvls)
 
-        return slide_num
+        elif len(body_phs) >= 1:
+            # Single body - combine all
+            combined = [
+                left_heading,
+                *list(left_content),
+                "",
+                right_heading,
+                *list(right_content),
+            ]
+            combined_levels = (
+                [0] + [1] * len(left_content) + [0] + [0] + [1] * len(right_content)
+            )
+            paragraphs = parse_content(combined, combined_levels)
+            formatted, lvls = format_for_py2ppt(paragraphs)
+            self._set_body_content(body_phs[0], formatted, lvls)
+
+        return len(self._pptx.slides)
 
     def add_image_slide(
         self,
@@ -416,31 +454,30 @@ class Presentation:
             ... )
         """
         layout_idx = self._find_layout(layout, LayoutType.IMAGE_CONTENT)
-        slide = self._pres.add_slide(layout=layout_idx)
-        slide_num = slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        slide = self._pptx.slides.add_slide(slide_layout)
 
-        import py2ppt
+        # Set title
+        title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
+        self._set_text_frame(title_ph, title)
 
-        py2ppt.set_title(self._pres, slide_num, title)
+        # Add image
+        image_path = Path(image_path)
+        if image_path.exists():
+            slide.shapes.add_picture(
+                str(image_path),
+                Inches(1),
+                Inches(2),
+                width=Inches(5),
+            )
 
-        # Add image - use sensible defaults for positioning
-        py2ppt.add_image(
-            self._pres,
-            slide_num,
-            str(image_path),
-            left="1in",
-            top="2in",
-            width="5in",
-        )
-
+        # Set caption if provided
         if caption:
-            # Try to set in body placeholder
-            try:
-                py2ppt.set_body(self._pres, slide_num, [caption])
-            except Exception:
-                pass
+            body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.BODY)
+            if body_ph:
+                self._set_text_frame(body_ph, caption)
 
-        return slide_num
+        return len(self._pptx.slides)
 
     def add_blank_slide(self, layout: str | int | None = None) -> int:
         """Add a blank slide.
@@ -455,8 +492,9 @@ class Presentation:
             >>> slide_num = pres.add_blank_slide()
         """
         layout_idx = self._find_layout(layout, LayoutType.BLANK)
-        slide = self._pres.add_slide(layout=layout_idx)
-        return slide.number
+        slide_layout = self._pptx.slide_layouts[layout_idx]
+        self._pptx.slides.add_slide(slide_layout)
+        return len(self._pptx.slides)
 
     def add_slide(
         self,
@@ -547,9 +585,12 @@ class Presentation:
         Example:
             >>> pres.set_notes(1, "Remember to mention...")
         """
-        import py2ppt
+        if slide_number < 1 or slide_number > len(self._pptx.slides):
+            return
 
-        py2ppt.set_notes(self._pres, slide_number, notes)
+        slide = self._pptx.slides[slide_number - 1]
+        notes_slide = slide.notes_slide
+        notes_slide.notes_text_frame.text = notes
 
     def save(self, path: str | Path) -> None:
         """Save the presentation.
@@ -560,7 +601,7 @@ class Presentation:
         Example:
             >>> pres.save("output.pptx")
         """
-        self._pres.save(path)
+        self._pptx.save(path)
 
     def __repr__(self) -> str:
         return f"Presentation({self.slide_count} slides, template={self._template.path.name})"

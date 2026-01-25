@@ -1,21 +1,20 @@
 """Tests for Presentation class."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
+from pptx import Presentation as PptxPresentation
 
 from aipptx import Template, Presentation
-import py2ppt
 
 
 @pytest.fixture
 def template(tmp_path: Path) -> Template:
     """Create a template for testing."""
     template_path = tmp_path / "template.pptx"
-    pres = py2ppt.create_presentation()
-    py2ppt.add_slide(pres, layout=0)
-    py2ppt.save_presentation(pres, str(template_path))
+    pres = PptxPresentation()
+    pres.slides.add_slide(pres.slide_layouts[0])
+    pres.save(str(template_path))
     return Template(template_path)
 
 
@@ -122,7 +121,8 @@ class TestPresentation:
         presentation.set_notes(1, "These are speaker notes.")
 
         # Verify notes were set
-        notes = py2ppt.get_notes(presentation._pres, 1)
+        slide = presentation._pptx.slides[0]
+        notes = slide.notes_slide.notes_text_frame.text
         assert "speaker notes" in notes.lower()
 
     def test_save(self, presentation: Presentation, tmp_path: Path) -> None:
@@ -135,8 +135,8 @@ class TestPresentation:
         assert output_path.exists()
 
         # Verify saved file can be opened
-        loaded = py2ppt.open_presentation(str(output_path))
-        assert py2ppt.get_slide_count(loaded) == 1
+        loaded = PptxPresentation(str(output_path))
+        assert len(loaded.slides) == 1
 
     def test_repr(self, presentation: Presentation) -> None:
         """Test string representation."""
@@ -243,5 +243,5 @@ class TestWithRealTemplate:
         assert pres.slide_count == 5
 
         # Verify file can be opened
-        loaded = py2ppt.open_presentation(str(output_path))
-        assert py2ppt.get_slide_count(loaded) == 5
+        loaded = PptxPresentation(str(output_path))
+        assert len(loaded.slides) == 5

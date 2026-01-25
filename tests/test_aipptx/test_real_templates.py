@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 
 import pytest
+from pptx import Presentation as PptxPresentation
 
 from aipptx import Template
-import py2ppt
 
 
 class TestAWSTemplate:
@@ -212,8 +212,8 @@ class TestAWSTemplate:
         assert pres.slide_count == 10
 
         # Open and verify structure
-        loaded = py2ppt.open_presentation(str(output_path))
-        assert py2ppt.get_slide_count(loaded) == 10
+        loaded = PptxPresentation(str(output_path))
+        assert len(loaded.slides) == 10
 
         print(f"\nCreated presentation with {pres.slide_count} slides")
         print(f"Saved to: {output_path}")

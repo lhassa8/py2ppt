@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from pptx import Presentation as PptxPresentation
+
 from .layout import LayoutDescription, LayoutRecommendation, analyze_layout, recommend_layout
 
 
@@ -35,62 +37,114 @@ class Template:
         if not self._path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
 
-        # Import py2ppt here to avoid circular imports
-        from py2ppt.core.presentation import Presentation as Py2PptPresentation
-        from py2ppt.oxml.layout import get_layout_info_list
-        from py2ppt.oxml.theme import get_theme_part
-
-        # Load the template
-        self._pres = Py2PptPresentation.open(self._path)
+        # Load the template with python-pptx
+        self._pptx = PptxPresentation(self._path)
 
         # Analyze layouts
-        self._layout_infos = get_layout_info_list(self._pres._package)
         self._layouts: list[LayoutDescription] = []
         self._analyze_layouts()
 
-        # Get theme
-        self._theme = get_theme_part(self._pres._package)
+        # Extract theme
         self._colors: dict[str, str] = {}
         self._fonts: dict[str, str] = {}
         self._extract_theme()
 
     def _analyze_layouts(self) -> None:
         """Analyze all layouts and build descriptions."""
-        for layout_info in self._layout_infos:
+        for idx, layout in enumerate(self._pptx.slide_layouts):
             # Convert placeholder info to dict format
             placeholders = []
-            for ph in layout_info.placeholders:
-                placeholders.append({
-                    "type": ph.type,
-                    "idx": ph.idx,
-                    "name": ph.name,
-                    "x": ph.position.x,
-                    "y": ph.position.y,
-                    "cx": ph.position.cx,
-                    "cy": ph.position.cy,
-                })
+            for ph in layout.placeholders:
+                try:
+                    placeholders.append({
+                        "type": self._get_placeholder_type(ph),
+                        "idx": ph.placeholder_format.idx,
+                        "name": ph.name,
+                        "x": ph.left,
+                        "y": ph.top,
+                        "cx": ph.width,
+                        "cy": ph.height,
+                    })
+                except Exception:
+                    continue
 
             layout_desc = analyze_layout(
-                name=layout_info.name,
-                index=layout_info.index,
+                name=layout.name,
+                index=idx,
                 placeholders=placeholders,
             )
             self._layouts.append(layout_desc)
 
-    def _extract_theme(self) -> None:
-        """Extract theme colors and fonts."""
-        if self._theme:
-            colors = self._theme.get_colors()
-            self._colors = {name: f"#{rgb}" for name, rgb in colors.items()}
+    def _get_placeholder_type(self, placeholder) -> str:
+        """Get placeholder type as string."""
+        from pptx.enum.shapes import PP_PLACEHOLDER
 
-            fonts = self._theme.get_fonts()
-            self._fonts = {
-                "heading": fonts.major_font.typeface,
-                "body": fonts.minor_font.typeface,
-            }
-        else:
-            # Defaults
-            self._fonts = {"heading": "Calibri Light", "body": "Calibri"}
+        type_map = {
+            PP_PLACEHOLDER.TITLE: "title",
+            PP_PLACEHOLDER.CENTER_TITLE: "ctrTitle",
+            PP_PLACEHOLDER.SUBTITLE: "subTitle",
+            PP_PLACEHOLDER.BODY: "body",
+            PP_PLACEHOLDER.OBJECT: "obj",
+            PP_PLACEHOLDER.CHART: "chart",
+            PP_PLACEHOLDER.TABLE: "tbl",
+            PP_PLACEHOLDER.PICTURE: "pic",
+            PP_PLACEHOLDER.FOOTER: "ftr",
+            PP_PLACEHOLDER.DATE: "dt",
+            PP_PLACEHOLDER.SLIDE_NUMBER: "sldNum",
+        }
+        ph_type = placeholder.placeholder_format.type
+        return type_map.get(ph_type, "body")
+
+    def _extract_theme(self) -> None:
+        """Extract theme colors and fonts from the slide master's theme."""
+        from lxml import etree
+
+        ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+        try:
+            # Access theme through slide master's relationships
+            sm = self._pptx.slide_master
+            for rel in sm.part.rels.values():
+                if "theme" in rel.reltype:
+                    theme_elem = etree.fromstring(rel.target_part.blob)
+
+                    # Extract colors
+                    clr_scheme = theme_elem.find(f".//{ns}clrScheme")
+                    if clr_scheme is not None:
+                        for child in clr_scheme:
+                            name = child.tag.split("}")[-1]
+                            srgb = child.find(f"{ns}srgbClr")
+                            if srgb is not None:
+                                self._colors[name] = f"#{srgb.get('val')}"
+                            else:
+                                sys_clr = child.find(f"{ns}sysClr")
+                                if sys_clr is not None:
+                                    last_clr = sys_clr.get("lastClr")
+                                    if last_clr:
+                                        self._colors[name] = f"#{last_clr}"
+
+                    # Extract fonts
+                    font_scheme = theme_elem.find(f".//{ns}fontScheme")
+                    if font_scheme is not None:
+                        major = font_scheme.find(f"{ns}majorFont")
+                        minor = font_scheme.find(f"{ns}minorFont")
+                        if major is not None:
+                            latin = major.find(f"{ns}latin")
+                            if latin is not None:
+                                self._fonts["heading"] = latin.get("typeface", "Calibri Light")
+                        if minor is not None:
+                            latin = minor.find(f"{ns}latin")
+                            if latin is not None:
+                                self._fonts["body"] = latin.get("typeface", "Calibri")
+                    break
+        except Exception:
+            pass
+
+        # Defaults if not found
+        if "heading" not in self._fonts:
+            self._fonts["heading"] = "Calibri Light"
+        if "body" not in self._fonts:
+            self._fonts["body"] = "Calibri"
 
     @property
     def path(self) -> Path:
