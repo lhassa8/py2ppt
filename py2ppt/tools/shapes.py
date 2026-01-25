@@ -708,3 +708,360 @@ def set_shape_order(
 
     slide._save()
     return True
+
+
+# ============================================================================
+# Shape Effects
+# ============================================================================
+
+
+def _find_shape_element(slide_elem, shape_id: int):
+    """Find a shape element by ID in the slide XML."""
+    from ..oxml.ns import qn
+
+    # Search in shape tree for sp elements
+    sp_tree = slide_elem.find(f".//{qn('p:spTree')}")
+    if sp_tree is None:
+        return None
+
+    # Look for shapes with matching ID
+    for sp in sp_tree.findall(f".//{qn('p:sp')}"):
+        nv_sp_pr = sp.find(qn("p:nvSpPr"))
+        if nv_sp_pr is not None:
+            c_nv_pr = nv_sp_pr.find(qn("p:cNvPr"))
+            if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+                return sp
+
+    # Also look for pictures (p:pic)
+    for pic in sp_tree.findall(f".//{qn('p:pic')}"):
+        nv_pic_pr = pic.find(qn("p:nvPicPr"))
+        if nv_pic_pr is not None:
+            c_nv_pr = nv_pic_pr.find(qn("p:cNvPr"))
+            if c_nv_pr is not None and c_nv_pr.get("id") == str(shape_id):
+                return pic
+
+    return None
+
+
+def _save_slide_element_directly(pkg, slide_number: int, slide_elem):
+    """Save slide element directly without rebuilding shape tree.
+
+    This is needed for effect changes that modify the XML directly.
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE
+    from ..oxml.presentation import get_presentation_part
+
+    pres_part = get_presentation_part(pkg)
+    if pres_part is None:
+        return False
+
+    slide_refs = pres_part.get_slide_refs()
+    if slide_number < 1 or slide_number > len(slide_refs):
+        return False
+
+    ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(ref.r_id)
+    if rel is None:
+        return False
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    xml_bytes = etree.tostring(
+        slide_elem,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part(slide_path, xml_bytes, CONTENT_TYPE.SLIDE)
+    return True
+
+
+def add_shadow(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    blur: float = 4.0,
+    distance: float = 3.0,
+    direction: int = 45,
+    color: str = "#000000",
+    transparency: int = 60,
+    shadow_type: Literal["outer", "inner"] = "outer",
+) -> bool:
+    """Add a shadow effect to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to add shadow to
+        blur: Blur radius in points (default 4)
+        distance: Shadow offset distance in points (default 3)
+        direction: Direction angle in degrees (default 45, down-right)
+        color: Shadow color as hex (default "#000000")
+        transparency: Transparency percentage 0-100 (default 60)
+        shadow_type: "outer" (default) or "inner"
+
+    Returns:
+        True if shadow added, False if shape not found
+
+    Example:
+        >>> add_shadow(pres, 1, shape_id, blur=5, distance=4, transparency=50)
+        >>> add_shadow(pres, 1, shape_id, shadow_type="inner")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Find or create effectLst
+    effect_lst = sp_pr.find(qn("a:effectLst"))
+    if effect_lst is None:
+        effect_lst = etree.SubElement(sp_pr, qn("a:effectLst"))
+
+    # Remove existing shadow
+    for shadow in effect_lst.findall(qn("a:outerShdw")):
+        effect_lst.remove(shadow)
+    for shadow in effect_lst.findall(qn("a:innerShdw")):
+        effect_lst.remove(shadow)
+
+    # Create shadow element
+    shadow_tag = qn("a:outerShdw") if shadow_type == "outer" else qn("a:innerShdw")
+    shadow = etree.SubElement(effect_lst, shadow_tag)
+
+    # Convert points to EMUs (1 pt = 12700 EMUs)
+    blur_emu = int(blur * 12700)
+    dist_emu = int(distance * 12700)
+    # Direction in 60000ths of a degree
+    dir_val = direction * 60000
+
+    shadow.set("blurRad", str(blur_emu))
+    shadow.set("dist", str(dist_emu))
+    shadow.set("dir", str(dir_val))
+
+    # Set color
+    srgb = etree.SubElement(shadow, qn("a:srgbClr"))
+    srgb.set("val", color.lstrip("#").upper())
+
+    # Set transparency (alpha)
+    if transparency > 0:
+        alpha = etree.SubElement(srgb, qn("a:alpha"))
+        alpha.set("val", str((100 - transparency) * 1000))
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def add_glow(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    radius: float = 5.0,
+    color: str = "#FFD700",
+    transparency: int = 40,
+) -> bool:
+    """Add a glow effect to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to add glow to
+        radius: Glow radius in points (default 5)
+        color: Glow color as hex (default "#FFD700" gold)
+        transparency: Transparency percentage 0-100 (default 40)
+
+    Returns:
+        True if glow added, False if shape not found
+
+    Example:
+        >>> add_glow(pres, 1, shape_id, radius=8, color="#00FF00")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Find or create effectLst
+    effect_lst = sp_pr.find(qn("a:effectLst"))
+    if effect_lst is None:
+        effect_lst = etree.SubElement(sp_pr, qn("a:effectLst"))
+
+    # Remove existing glow
+    for glow in effect_lst.findall(qn("a:glow")):
+        effect_lst.remove(glow)
+
+    # Create glow element
+    glow = etree.SubElement(effect_lst, qn("a:glow"))
+
+    # Convert points to EMUs
+    radius_emu = int(radius * 12700)
+    glow.set("rad", str(radius_emu))
+
+    # Set color
+    srgb = etree.SubElement(glow, qn("a:srgbClr"))
+    srgb.set("val", color.lstrip("#").upper())
+
+    # Set transparency
+    if transparency > 0:
+        alpha = etree.SubElement(srgb, qn("a:alpha"))
+        alpha.set("val", str((100 - transparency) * 1000))
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def add_reflection(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+    *,
+    blur: float = 0.5,
+    start_position: int = 0,
+    start_transparency: int = 0,
+    end_transparency: int = 100,
+    distance: float = 0.0,
+    direction: int = 90,
+    fade_direction: int = 90,
+    size: int = 50,
+) -> bool:
+    """Add a reflection effect to a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to add reflection to
+        blur: Blur radius in points (default 0.5)
+        start_position: Start position percentage (default 0)
+        start_transparency: Start transparency 0-100 (default 0, opaque)
+        end_transparency: End transparency 0-100 (default 100, transparent)
+        distance: Offset distance in points (default 0)
+        direction: Reflection direction in degrees (default 90)
+        fade_direction: Fade direction in degrees (default 90)
+        size: Reflection size percentage (default 50)
+
+    Returns:
+        True if reflection added, False if shape not found
+
+    Example:
+        >>> add_reflection(pres, 1, shape_id, size=30, blur=1)
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find or create spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        sp_pr = etree.SubElement(shape_elem, qn("p:spPr"))
+
+    # Find or create effectLst
+    effect_lst = sp_pr.find(qn("a:effectLst"))
+    if effect_lst is None:
+        effect_lst = etree.SubElement(sp_pr, qn("a:effectLst"))
+
+    # Remove existing reflection
+    for refl in effect_lst.findall(qn("a:reflection")):
+        effect_lst.remove(refl)
+
+    # Create reflection element
+    refl = etree.SubElement(effect_lst, qn("a:reflection"))
+
+    # Convert values
+    blur_emu = int(blur * 12700)
+    dist_emu = int(distance * 12700)
+    dir_val = direction * 60000
+    fade_dir_val = fade_direction * 60000
+
+    refl.set("blurRad", str(blur_emu))
+    refl.set("stA", str(start_transparency * 1000))
+    refl.set("stPos", str(start_position * 1000))
+    refl.set("endA", str(end_transparency * 1000))
+    refl.set("endPos", str(size * 1000))
+    refl.set("dist", str(dist_emu))
+    refl.set("dir", str(dir_val))
+    refl.set("fadeDir", str(fade_dir_val))
+    refl.set("algn", "bl")  # Bottom-left alignment
+    refl.set("rotWithShape", "0")
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True
+
+
+def remove_effects(
+    presentation: Presentation,
+    slide_number: int,
+    shape_id: int,
+) -> bool:
+    """Remove all effects from a shape.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        shape_id: The shape ID to remove effects from
+
+    Returns:
+        True if effects removed, False if shape not found
+
+    Example:
+        >>> remove_effects(pres, 1, shape_id)
+    """
+    from ..oxml.ns import qn
+
+    slide = presentation.get_slide(slide_number)
+    slide_elem = slide._part._element
+
+    # Find shape element by ID
+    shape_elem = _find_shape_element(slide_elem, shape_id)
+    if shape_elem is None:
+        return False
+
+    # Find spPr
+    sp_pr = shape_elem.find(qn("p:spPr"))
+    if sp_pr is None:
+        return True  # No effects to remove
+
+    # Remove effectLst
+    effect_lst = sp_pr.find(qn("a:effectLst"))
+    if effect_lst is not None:
+        sp_pr.remove(effect_lst)
+
+    _save_slide_element_directly(presentation._package, slide_number, slide_elem)
+    return True

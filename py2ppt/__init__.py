@@ -100,6 +100,9 @@ from .tools.presentation import (
 )
 from .tools.shapes import (
     add_connector,
+    add_glow,
+    add_reflection,
+    add_shadow,
     add_shape,
     bring_forward,
     bring_to_front,
@@ -107,6 +110,7 @@ from .tools.shapes import (
     get_shape_order,
     group_shapes,
     move_shape,
+    remove_effects,
     resize_shape,
     send_backward,
     send_to_back,
@@ -241,6 +245,11 @@ __all__ = [
     "send_backward",
     "get_shape_order",
     "set_shape_order",
+    # Shape effects
+    "add_shadow",
+    "add_glow",
+    "add_reflection",
+    "remove_effects",
 
     # Theme tools
     "set_theme_color",
