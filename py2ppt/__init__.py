@@ -39,7 +39,15 @@ __version__ = "0.1.0"
 from .core.presentation import Presentation
 from .core.slide import Slide
 
-# Content tools
+# === Tool Functions (Main API) ===
+from .tools.animation import (
+    add_animation,
+    get_available_animations,
+    get_available_transitions,
+    remove_animations,
+    remove_transition,
+    set_slide_transition,
+)
 from .tools.content import (
     add_bullet,
     add_text_box,
@@ -48,8 +56,10 @@ from .tools.content import (
     set_subtitle,
     set_title,
 )
-
-# Inspection tools
+from .tools.diagrams import (
+    add_diagram,
+    get_diagram_types,
+)
 from .tools.inspection import (
     describe_slide,
     get_placeholders,
@@ -58,39 +68,51 @@ from .tools.inspection import (
     get_theme_fonts,
     list_layouts,
 )
-
-# Media tools
 from .tools.media import (
+    add_chart,
     add_image,
     add_table,
+    crop_image,
+    flip_image,
+    merge_table_cells,
+    rotate_image,
+    style_table_cell,
+    update_chart_data,
     update_table_cell,
 )
-
-# === Tool Functions (Main API) ===
-# Presentation tools
 from .tools.presentation import (
     create_presentation,
     open_presentation,
     save_presentation,
 )
-
-# Slide tools
+from .tools.shapes import (
+    add_connector,
+    add_shape,
+    delete_shape,
+    group_shapes,
+    move_shape,
+    resize_shape,
+)
 from .tools.slides import (
     add_slide,
     delete_slide,
     duplicate_slide,
     reorder_slides,
 )
-
-# Style tools
 from .tools.style import (
     set_text_style,
 )
+from .tools.theme import (
+    apply_theme_colors,
+    get_theme_info,
+    set_theme_color,
+    set_theme_font,
+)
+
+# === Utilities ===
 from .utils.colors import (
     parse_color,
 )
-
-# === Errors ===
 from .utils.errors import (
     InvalidTemplateError,
     LayoutNotFoundError,
@@ -98,8 +120,6 @@ from .utils.errors import (
     Py2PptError,
     SlideNotFoundError,
 )
-
-# === Utilities ===
 from .utils.units import (
     Cm,
     Emu,
@@ -139,7 +159,14 @@ __all__ = [
     # Media tools
     "add_table",
     "update_table_cell",
+    "style_table_cell",
+    "merge_table_cells",
     "add_image",
+    "crop_image",
+    "rotate_image",
+    "flip_image",
+    "add_chart",
+    "update_chart_data",
 
     # Inspection tools
     "list_layouts",
@@ -151,6 +178,32 @@ __all__ = [
 
     # Style tools
     "set_text_style",
+
+    # Shape tools
+    "add_shape",
+    "add_connector",
+    "group_shapes",
+    "delete_shape",
+    "move_shape",
+    "resize_shape",
+
+    # Theme tools
+    "set_theme_color",
+    "set_theme_font",
+    "get_theme_info",
+    "apply_theme_colors",
+
+    # Animation tools
+    "set_slide_transition",
+    "add_animation",
+    "remove_animations",
+    "remove_transition",
+    "get_available_transitions",
+    "get_available_animations",
+
+    # Diagram tools
+    "add_diagram",
+    "get_diagram_types",
 
     # Units
     "Inches",

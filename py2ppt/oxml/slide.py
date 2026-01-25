@@ -10,7 +10,7 @@ from lxml import etree
 
 from .ns import CONTENT_TYPE, REL_TYPE, nsmap, qn
 from .package import Package
-from .shapes import Picture, Shape, ShapeTree, Table
+from .shapes import Chart, Picture, Shape, ShapeTree, Table
 
 
 class SlidePart:
@@ -79,6 +79,10 @@ class SlidePart:
     def add_table(self, table: Table) -> None:
         """Add a table to the slide."""
         self.shape_tree.add_shape(table)
+
+    def add_chart(self, chart: Chart) -> None:
+        """Add a chart to the slide."""
+        self.shape_tree.add_shape(chart)
 
     def update_xml(self) -> None:
         """Update the XML element from the shape tree."""

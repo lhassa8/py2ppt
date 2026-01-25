@@ -22,15 +22,41 @@ from .ns import qn
 
 @dataclass
 class RunProperties:
-    """Run-level text formatting."""
+    """Run-level text formatting.
+
+    Attributes:
+        font_family: Font family name (e.g., "Arial", "Calibri")
+        font_size: Font size in hundredths of a point (centipoints)
+        bold: Whether text is bold
+        italic: Whether text is italic
+        underline: Whether text has underline
+        strikethrough: Whether text has strikethrough
+        double_strikethrough: Whether text has double strikethrough
+        subscript: Whether text is subscript
+        superscript: Whether text is superscript
+        color: Hex color without # (e.g., "FF0000")
+        theme_color: Theme color reference (e.g., "accent1", "dk1")
+        highlight: Highlight color as hex without #
+        char_spacing: Character spacing in hundredths of a point
+        hyperlink: URL or relationship ID for hyperlink (starts with "rId" for internal)
+        language: Language code (e.g., "en-US")
+    """
 
     font_family: str | None = None
-    font_size: int | None = None  # in hundredths of a point (centipoints)
+    font_size: int | None = None
     bold: bool | None = None
     italic: bool | None = None
     underline: bool | None = None
-    color: str | None = None  # hex color without #
-    theme_color: str | None = None  # e.g., "accent1"
+    strikethrough: bool | None = None
+    double_strikethrough: bool | None = None
+    subscript: bool | None = None
+    superscript: bool | None = None
+    color: str | None = None
+    theme_color: str | None = None
+    highlight: str | None = None
+    char_spacing: int | None = None
+    hyperlink: str | None = None
+    language: str | None = None
 
     def to_element(self) -> etree._Element | None:
         """Create rPr element. Returns None if no properties set."""
@@ -42,22 +68,53 @@ class RunProperties:
                 self.bold,
                 self.italic,
                 self.underline,
+                self.strikethrough,
+                self.double_strikethrough,
+                self.subscript,
+                self.superscript,
                 self.color,
                 self.theme_color,
+                self.highlight,
+                self.char_spacing,
+                self.hyperlink,
+                self.language,
             ]
         ):
             return None
 
         rpr = etree.Element(qn("a:rPr"))
 
+        # Language
+        if self.language is not None:
+            rpr.set("lang", self.language)
+
+        # Font size
         if self.font_size is not None:
             rpr.set("sz", str(self.font_size))
+
+        # Bold, italic, underline
         if self.bold is not None:
             rpr.set("b", "1" if self.bold else "0")
         if self.italic is not None:
             rpr.set("i", "1" if self.italic else "0")
         if self.underline is not None:
             rpr.set("u", "sng" if self.underline else "none")
+
+        # Strikethrough
+        if self.strikethrough is not None:
+            rpr.set("strike", "sngStrike" if self.strikethrough else "noStrike")
+        elif self.double_strikethrough is not None:
+            rpr.set("strike", "dblStrike" if self.double_strikethrough else "noStrike")
+
+        # Superscript/Subscript (baseline adjustment)
+        if self.superscript:
+            rpr.set("baseline", "30000")  # 30% above baseline
+        elif self.subscript:
+            rpr.set("baseline", "-25000")  # 25% below baseline
+
+        # Character spacing
+        if self.char_spacing is not None:
+            rpr.set("spc", str(self.char_spacing))
 
         # Color
         if self.color is not None:
@@ -69,10 +126,22 @@ class RunProperties:
             scheme = etree.SubElement(solid_fill, qn("a:schemeClr"))
             scheme.set("val", self.theme_color)
 
+        # Highlight (uses a:highlight element)
+        if self.highlight is not None:
+            highlight = etree.SubElement(rpr, qn("a:highlight"))
+            srgb = etree.SubElement(highlight, qn("a:srgbClr"))
+            srgb.set("val", self.highlight.lstrip("#").upper())
+
         # Font
         if self.font_family is not None:
             latin = etree.SubElement(rpr, qn("a:latin"))
             latin.set("typeface", self.font_family)
+
+        # Hyperlink
+        if self.hyperlink is not None:
+            # Hyperlink is handled at the run level, not in rPr
+            # We store it here but apply it in Run.to_element()
+            pass
 
         return rpr
 
@@ -83,6 +152,11 @@ class RunProperties:
             return cls()
 
         props = cls()
+
+        # Language
+        lang = elem.get("lang")
+        if lang:
+            props.language = lang
 
         # Font size (in hundredths of a point)
         sz = elem.get("sz")
@@ -100,6 +174,31 @@ class RunProperties:
         if u is not None:
             props.underline = u not in ("none", "0")
 
+        # Strikethrough
+        strike = elem.get("strike")
+        if strike is not None:
+            if strike == "sngStrike":
+                props.strikethrough = True
+            elif strike == "dblStrike":
+                props.double_strikethrough = True
+            elif strike == "noStrike":
+                props.strikethrough = False
+                props.double_strikethrough = False
+
+        # Superscript/Subscript (baseline)
+        baseline = elem.get("baseline")
+        if baseline is not None:
+            baseline_val = int(baseline)
+            if baseline_val > 0:
+                props.superscript = True
+            elif baseline_val < 0:
+                props.subscript = True
+
+        # Character spacing
+        spc = elem.get("spc")
+        if spc:
+            props.char_spacing = int(spc)
+
         # Color
         solid_fill = elem.find(qn("a:solidFill"))
         if solid_fill is not None:
@@ -109,6 +208,13 @@ class RunProperties:
             scheme = solid_fill.find(qn("a:schemeClr"))
             if scheme is not None:
                 props.theme_color = scheme.get("val")
+
+        # Highlight
+        highlight = elem.find(qn("a:highlight"))
+        if highlight is not None:
+            srgb = highlight.find(qn("a:srgbClr"))
+            if srgb is not None:
+                props.highlight = srgb.get("val")
 
         # Font
         latin = elem.find(qn("a:latin"))
@@ -131,7 +237,17 @@ class Run:
 
         # Run properties
         rpr = self.properties.to_element()
-        if rpr is not None:
+        if rpr is None:
+            rpr = etree.Element(qn("a:rPr"))
+
+        # Add hyperlink to run properties if present
+        if self.properties.hyperlink is not None:
+            hlink = etree.SubElement(rpr, qn("a:hlinkClick"))
+            # Set relationship ID for the hyperlink
+            hlink.set(qn("r:id"), self.properties.hyperlink)
+
+        # Only append rpr if it has content
+        if len(rpr) > 0 or rpr.attrib:
             r.append(rpr)
 
         # Text content
@@ -150,6 +266,14 @@ class Run:
 
         rpr = elem.find(qn("a:rPr"))
         props = RunProperties.from_element(rpr)
+
+        # Check for hyperlink
+        if rpr is not None:
+            hlink = rpr.find(qn("a:hlinkClick"))
+            if hlink is not None:
+                r_id = hlink.get(qn("r:id"))
+                if r_id:
+                    props.hyperlink = r_id
 
         return cls(text=text, properties=props)
 

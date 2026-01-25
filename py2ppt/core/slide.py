@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..oxml.shapes import (
+    BorderStyle,
+    CellStyle,
+    Chart,
     Picture,
     Position,
     Shape,
@@ -13,9 +16,13 @@ from ..oxml.shapes import (
     TextFrame,
 )
 from ..oxml.slide import SlidePart, update_slide_in_package
+from ..oxml.text import Paragraph, Run, RunProperties
 from ..utils.colors import is_theme_color, parse_color
 from ..utils.errors import PlaceholderNotFoundError
 from ..utils.units import parse_length
+
+# Type alias for rich text: either a string or list of formatted segments
+RichText = str | list[dict]
 
 if TYPE_CHECKING:
     from .presentation import Presentation
@@ -43,7 +50,7 @@ class Slide:
         return self._number
 
     @property
-    def shapes(self) -> list[Shape | Picture | Table]:
+    def shapes(self) -> list[Shape | Picture | Table | Chart]:
         """Get all shapes on the slide."""
         return self._part.shape_tree.shapes
 
@@ -131,27 +138,33 @@ class Slide:
 
     def set_title(
         self,
-        text: str,
+        text: RichText,
         *,
         font_size: int | None = None,
         font_family: str | None = None,
         bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
         color: str | None = None,
     ) -> None:
         """Set the title text.
 
         Args:
-            text: Title text
+            text: Title text (string or list of formatted segments)
             font_size: Font size in points
             font_family: Font family name
             bold: Whether to make text bold
+            italic: Whether to make text italic
+            underline: Whether to underline text
             color: Color as hex, rgb, or name
         """
         shape = self._part.get_title_placeholder()
         if shape is None:
             raise PlaceholderNotFoundError("title", self._number, self.get_placeholder_types())
 
-        self._set_text_content(shape, text, font_size, font_family, bold, color)
+        self._set_rich_text_content(
+            shape, text, font_size, font_family, bold, italic, underline, color
+        )
         self._save()
 
     def get_subtitle(self) -> str | None:
@@ -163,27 +176,33 @@ class Slide:
 
     def set_subtitle(
         self,
-        text: str,
+        text: RichText,
         *,
         font_size: int | None = None,
         font_family: str | None = None,
         bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
         color: str | None = None,
     ) -> None:
         """Set the subtitle text.
 
         Args:
-            text: Subtitle text
+            text: Subtitle text (string or list of formatted segments)
             font_size: Font size in points
             font_family: Font family name
             bold: Whether to make text bold
+            italic: Whether to make text italic
+            underline: Whether to underline text
             color: Color as hex, rgb, or name
         """
         shape = self._part.get_subtitle_placeholder()
         if shape is None:
             raise PlaceholderNotFoundError("subtitle", self._number, self.get_placeholder_types())
 
-        self._set_text_content(shape, text, font_size, font_family, bold, color)
+        self._set_rich_text_content(
+            shape, text, font_size, font_family, bold, italic, underline, color
+        )
         self._save()
 
     def get_body(self) -> list[str]:
@@ -196,7 +215,7 @@ class Slide:
 
     def set_body(
         self,
-        content: str | list[str],
+        content: str | list,
         *,
         levels: list[int] | None = None,
         font_size: int | None = None,
@@ -206,7 +225,7 @@ class Slide:
         """Set body content.
 
         Args:
-            content: Single string or list of bullet points
+            content: Single string, list of bullet points, or list with rich text
             levels: Optional list of indent levels (0-8)
             font_size: Font size in points
             font_family: Font family name
@@ -222,25 +241,29 @@ class Slide:
         if levels is None:
             levels = [0] * len(content)
 
-        self._set_bullet_content(shape, content, levels, font_size, font_family, color)
+        self._set_rich_bullet_content(shape, content, levels, font_size, font_family, color)
         self._save()
 
     def add_bullet(
         self,
-        text: str,
+        text: RichText,
         *,
         level: int = 0,
         font_size: int | None = None,
         font_family: str | None = None,
+        bold: bool = False,
+        italic: bool = False,
         color: str | None = None,
     ) -> None:
         """Add a bullet point to the body.
 
         Args:
-            text: Bullet text
+            text: Bullet text (string or list of formatted segments)
             level: Indent level (0-8)
             font_size: Font size in points
             font_family: Font family name
+            bold: Whether to make text bold
+            italic: Whether to make text italic
             color: Color as hex, rgb, or name
         """
         shape = self._part.get_body_placeholder()
@@ -250,43 +273,41 @@ class Slide:
         if shape.text_frame is None:
             shape.text_frame = TextFrame()
 
-        # Parse color
-        color_val = None
-        if color:
-            parsed = parse_color(color)
-            if not is_theme_color(parsed):
-                color_val = parsed
-
-        shape.text_frame.add_paragraph(
-            text,
-            level=level,
-            font_size=font_size,
-            color=color_val,
+        # Add paragraph with rich text support
+        para = self._create_rich_paragraph(
+            text, level, font_size, font_family, bold, italic, False, color
         )
+        shape.text_frame.body.paragraphs.append(para)
         self._save()
 
     def set_placeholder_text(
         self,
         placeholder: str,
-        text: str,
+        text: RichText,
         *,
         font_size: int | None = None,
         font_family: str | None = None,
         bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
         color: str | None = None,
     ) -> None:
         """Set text in a specific placeholder.
 
         Args:
             placeholder: Placeholder type or name
-            text: Text content
+            text: Text content (string or list of formatted segments)
             font_size: Font size in points
             font_family: Font family name
             bold: Whether to make text bold
+            italic: Whether to make text italic
+            underline: Whether to underline text
             color: Color as hex, rgb, or name
         """
         shape = self._find_placeholder(placeholder)
-        self._set_text_content(shape, text, font_size, font_family, bold, color)
+        self._set_rich_text_content(
+            shape, text, font_size, font_family, bold, italic, underline, color
+        )
         self._save()
 
     def add_text_box(
@@ -357,6 +378,14 @@ class Slide:
         height: str | int | None = None,
         *,
         placeholder: str | None = None,
+        header_row: bool = True,
+        banded_rows: bool = True,
+        first_col: bool = False,
+        last_col: bool = False,
+        header_background: str | None = None,
+        header_text_color: str | None = None,
+        cell_borders: bool = True,
+        border_color: str = "#000000",
     ) -> Table:
         """Add a table to the slide.
 
@@ -367,6 +396,14 @@ class Slide:
             width: Table width
             height: Table height
             placeholder: Placeholder to fill (alternative to position)
+            header_row: Style first row as header
+            banded_rows: Alternate row colors
+            first_col: Style first column differently
+            last_col: Style last column differently
+            header_background: Header background color (hex)
+            header_text_color: Header text color (hex)
+            cell_borders: Show cell borders
+            border_color: Border color (hex)
 
         Returns:
             The new Table object
@@ -404,12 +441,40 @@ class Slide:
         col_widths = [col_width] * num_cols
         row_heights = [row_height] * num_rows
 
+        # Create border style
+        border_style = None
+        if cell_borders:
+            border_style = BorderStyle(color=border_color.lstrip("#"))
+        else:
+            border_style = BorderStyle(style="none")
+
         # Create cells
         rows = []
-        for row_data in data:
+        for row_idx, row_data in enumerate(data):
             row = []
-            for cell_data in row_data:
+            for _col_idx, cell_data in enumerate(row_data):
                 cell = TableCell(text=str(cell_data) if cell_data is not None else "")
+
+                # Apply styling
+                is_header = header_row and row_idx == 0
+
+                # Create cell style
+                cell_style = CellStyle(
+                    border_top=border_style,
+                    border_bottom=border_style,
+                    border_left=border_style,
+                    border_right=border_style,
+                )
+
+                # Header styling
+                if is_header:
+                    if header_background:
+                        cell_style.background_color = header_background.lstrip("#")
+                    if header_text_color:
+                        cell.color = header_text_color.lstrip("#")
+                    cell.bold = True
+
+                cell.style = cell_style
                 row.append(cell)
             rows.append(row)
 
@@ -420,6 +485,10 @@ class Slide:
             rows=rows,
             col_widths=col_widths,
             row_heights=row_heights,
+            first_row=header_row,
+            banded_rows=banded_rows,
+            first_col=first_col,
+            last_col=last_col,
         )
 
         self._part.add_table(table)
@@ -463,6 +532,11 @@ class Slide:
                     "rows": shape.num_rows,
                     "cols": shape.num_cols,
                 })
+            elif isinstance(shape, Chart):
+                shapes.append({
+                    "type": "chart",
+                    "name": shape.name,
+                })
 
         return {
             "slide_number": self._number,
@@ -479,7 +553,7 @@ class Slide:
         bold: bool,
         color: str | None,
     ) -> None:
-        """Set text content in a shape."""
+        """Set text content in a shape (legacy method)."""
         if shape.text_frame is None:
             shape.text_frame = TextFrame()
 
@@ -498,6 +572,137 @@ class Slide:
             bold=bold,
             color=color_val,
         )
+
+    def _set_rich_text_content(
+        self,
+        shape: Shape,
+        text: RichText,
+        font_size: int | None,
+        font_family: str | None,
+        bold: bool,
+        italic: bool,
+        underline: bool,
+        color: str | None,
+    ) -> None:
+        """Set text content in a shape with rich text support."""
+        if shape.text_frame is None:
+            shape.text_frame = TextFrame()
+
+        shape.text_frame.clear()
+
+        para = self._create_rich_paragraph(
+            text, 0, font_size, font_family, bold, italic, underline, color
+        )
+        shape.text_frame.body.paragraphs.append(para)
+
+    def _create_rich_paragraph(
+        self,
+        text: RichText,
+        level: int,
+        font_size: int | None,
+        font_family: str | None,
+        bold: bool,
+        italic: bool,
+        underline: bool,
+        color: str | None,
+    ) -> Paragraph:
+        """Create a paragraph with rich text support."""
+        from ..oxml.text import ParagraphProperties
+
+        para_props = ParagraphProperties(level=level)
+
+        if isinstance(text, str):
+            # Simple text - use default formatting
+            color_val = None
+            theme_color = None
+            if color:
+                parsed = parse_color(color)
+                if is_theme_color(parsed):
+                    theme_color = parsed
+                else:
+                    color_val = parsed
+
+            props = RunProperties(
+                font_size=font_size * 100 if font_size else None,
+                font_family=font_family,
+                bold=bold if bold else None,
+                italic=italic if italic else None,
+                underline=underline if underline else None,
+                color=color_val,
+                theme_color=theme_color,
+            )
+            run = Run(text=text, properties=props)
+            return Paragraph(runs=[run], properties=para_props)
+        else:
+            # Rich text - list of formatted segments
+            runs = []
+            for segment in text:
+                seg_text = segment.get("text", "")
+
+                # Parse segment color
+                seg_color = segment.get("color")
+                color_val = None
+                theme_color = None
+                if seg_color:
+                    parsed = parse_color(seg_color)
+                    if is_theme_color(parsed):
+                        theme_color = parsed
+                    else:
+                        color_val = parsed
+
+                # Parse highlight color
+                highlight_val = None
+                highlight = segment.get("highlight")
+                if highlight:
+                    parsed_hl = parse_color(highlight)
+                    if not is_theme_color(parsed_hl):
+                        highlight_val = parsed_hl
+
+                # Get font size (convert points to centipoints)
+                seg_font_size = segment.get("font_size")
+                if seg_font_size:
+                    seg_font_size = seg_font_size * 100
+
+                props = RunProperties(
+                    font_size=seg_font_size,
+                    font_family=segment.get("font_family"),
+                    bold=segment.get("bold"),
+                    italic=segment.get("italic"),
+                    underline=segment.get("underline"),
+                    strikethrough=segment.get("strikethrough"),
+                    superscript=segment.get("superscript"),
+                    subscript=segment.get("subscript"),
+                    color=color_val,
+                    theme_color=theme_color,
+                    highlight=highlight_val,
+                    char_spacing=segment.get("char_spacing"),
+                    hyperlink=segment.get("hyperlink"),
+                )
+                run = Run(text=seg_text, properties=props)
+                runs.append(run)
+
+            return Paragraph(runs=runs, properties=para_props)
+
+    def _set_rich_bullet_content(
+        self,
+        shape: Shape,
+        items: list,
+        levels: list[int],
+        font_size: int | None,
+        font_family: str | None,
+        color: str | None,
+    ) -> None:
+        """Set bullet content in a shape with rich text support."""
+        if shape.text_frame is None:
+            shape.text_frame = TextFrame()
+
+        shape.text_frame.clear()
+
+        for item, level in zip(items, levels, strict=False):
+            para = self._create_rich_paragraph(
+                item, level, font_size, font_family, False, False, False, color
+            )
+            shape.text_frame.body.paragraphs.append(para)
 
     def _set_bullet_content(
         self,

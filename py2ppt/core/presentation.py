@@ -135,6 +135,19 @@ class Presentation:
             }
         return {"heading": "Calibri Light", "body": "Calibri"}
 
+    def _save_theme(self) -> None:
+        """Save theme changes back to the package."""
+        if self._theme is None:
+            return
+
+        # Save theme XML to package
+        self._package.set_part(
+            "ppt/theme/theme1.xml",
+            self._theme.to_xml(),
+            CONTENT_TYPE.THEME,
+        )
+        self._dirty = True
+
     def add_slide(
         self,
         layout: str | int = 0,

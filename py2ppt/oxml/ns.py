@@ -169,3 +169,12 @@ class CONTENT_TYPE:
     SVG = "image/svg+xml"
     EMF = "image/x-emf"
     WMF = "image/x-wmf"
+
+    # Charts
+    CHART = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml"
+
+    # Diagrams
+    DIAGRAM_COLORS = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"
+    DIAGRAM_DATA = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"
+    DIAGRAM_LAYOUT = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"
+    DIAGRAM_STYLE = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"
