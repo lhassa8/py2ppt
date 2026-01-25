@@ -3,12 +3,10 @@
 import io
 import zipfile
 
-import pytest
-
 from py2ppt.oxml.package import (
+    ContentTypes,
     Package,
     RelationshipCollection,
-    ContentTypes,
     create_blank_package,
 )
 

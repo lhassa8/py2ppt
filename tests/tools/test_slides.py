@@ -3,7 +3,7 @@
 import pytest
 
 import py2ppt as ppt
-from py2ppt.utils.errors import LayoutNotFoundError, SlideNotFoundError
+from py2ppt.utils.errors import LayoutNotFoundError
 
 
 class TestAddSlide:

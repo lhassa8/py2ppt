@@ -1,9 +1,7 @@
 """Tests for content tools."""
 
-import pytest
 
 import py2ppt as ppt
-from py2ppt.utils.errors import PlaceholderNotFoundError
 
 
 class TestSetTitle:

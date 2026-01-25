@@ -9,6 +9,14 @@ from lxml import etree
 
 from ..core.presentation import Presentation
 from ..oxml.ns import qn
+from ..oxml.theme import get_theme_part
+
+
+def _ensure_theme_loaded(presentation: Presentation):
+    """Ensure the theme is loaded into the presentation."""
+    if presentation._theme is None:
+        presentation._theme = get_theme_part(presentation._package)
+    return presentation._theme
 
 
 def set_theme_color(
@@ -53,8 +61,8 @@ def set_theme_color(
     }
     color_name = color_map.get(color_name.lower(), color_name.lower())
 
-    # Get theme part
-    theme_part = presentation._theme
+    # Get theme part (ensure it's loaded)
+    theme_part = _ensure_theme_loaded(presentation)
     if theme_part is None:
         raise ValueError("Presentation has no theme")
 
@@ -117,8 +125,8 @@ def set_theme_font(
     if role_key is None:
         raise ValueError(f"Unknown font role: {role}. Use 'major' or 'minor'.")
 
-    # Get theme part
-    theme_part = presentation._theme
+    # Get theme part (ensure it's loaded)
+    theme_part = _ensure_theme_loaded(presentation)
     if theme_part is None:
         raise ValueError("Presentation has no theme")
 

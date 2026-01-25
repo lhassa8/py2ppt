@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 import py2ppt as ppt
 
 
@@ -19,7 +17,7 @@ class TestAIAgentWorkflow:
         # Step 2: Inspect available layouts
         layouts = ppt.list_layouts(pres)
         assert len(layouts) > 0
-        layout_names = [l["name"] for l in layouts]
+        assert any(layout["name"] for layout in layouts)
 
         # Step 3: Get theme colors
         colors = ppt.get_theme_colors(pres)

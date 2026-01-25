@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 import py2ppt as ppt
 
 
