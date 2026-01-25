@@ -70,6 +70,12 @@ from .tools.diagrams import (
     add_diagram,
     get_diagram_types,
 )
+from .tools.export import (
+    check_export_dependencies,
+    export_all_slides,
+    export_slide_to_image,
+    export_to_pdf,
+)
 from .tools.inspection import (
     describe_slide,
     get_placeholders,
@@ -275,6 +281,12 @@ __all__ = [
     # Diagram tools
     "add_diagram",
     "get_diagram_types",
+
+    # Export tools
+    "export_to_pdf",
+    "export_slide_to_image",
+    "export_all_slides",
+    "check_export_dependencies",
 
     # Units
     "Inches",

@@ -35,6 +35,12 @@ from .diagrams import (
     add_diagram,
     get_diagram_types,
 )
+from .export import (
+    check_export_dependencies,
+    export_all_slides,
+    export_slide_to_image,
+    export_to_pdf,
+)
 from .inspection import (
     describe_slide,
     get_placeholders,
@@ -204,4 +210,9 @@ __all__ = [
     # Diagram tools
     "add_diagram",
     "get_diagram_types",
+    # Export tools
+    "export_to_pdf",
+    "export_slide_to_image",
+    "export_all_slides",
+    "check_export_dependencies",
 ]
