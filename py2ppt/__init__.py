@@ -86,11 +86,15 @@ from .tools.export import (
 )
 from .tools.inspection import (
     describe_slide,
+    get_all_thumbnails,
     get_placeholders,
+    get_presentation_thumbnail,
     get_slide_count,
+    get_slide_thumbnail,
     get_theme_colors,
     get_theme_fonts,
     list_layouts,
+    save_slide_thumbnail,
 )
 from .tools.media import (
     add_audio,
@@ -281,6 +285,11 @@ __all__ = [
     "get_theme_colors",
     "get_theme_fonts",
     "get_slide_count",
+    # Thumbnails
+    "get_presentation_thumbnail",
+    "get_slide_thumbnail",
+    "save_slide_thumbnail",
+    "get_all_thumbnails",
 
     # Style tools
     "set_text_style",

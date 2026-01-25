@@ -189,3 +189,257 @@ def get_slide_count(presentation: Presentation) -> int:
         >>> print(f"Presentation has {count} slides")
     """
     return presentation.slide_count
+
+
+# ============================================================================
+# Thumbnails
+# ============================================================================
+
+
+def get_presentation_thumbnail(presentation: Presentation) -> bytes | None:
+    """Get the embedded thumbnail image from the presentation.
+
+    PowerPoint files often contain an embedded thumbnail image.
+    This function extracts it if available.
+
+    Args:
+        presentation: The presentation to inspect
+
+    Returns:
+        Image data as bytes, or None if no thumbnail is embedded
+
+    Example:
+        >>> thumbnail = get_presentation_thumbnail(pres)
+        >>> if thumbnail:
+        ...     with open("thumb.png", "wb") as f:
+        ...         f.write(thumbnail)
+    """
+    pkg = presentation._package
+
+    # Try common thumbnail locations in PPTX
+    thumbnail_paths = [
+        "docProps/thumbnail.jpeg",
+        "docProps/thumbnail.png",
+        "_rels/.rels",  # Check for thumbnail relationship
+    ]
+
+    for path in thumbnail_paths[:2]:  # Check direct paths first
+        data = pkg.get_part(path)
+        if data:
+            return data
+
+    return None
+
+
+def get_slide_thumbnail(
+    presentation: Presentation,
+    slide_number: int,
+    *,
+    width: int = 320,
+    height: int = 240,
+    format: str = "png",
+) -> bytes | None:
+    """Generate a thumbnail image for a specific slide.
+
+    Requires LibreOffice and pdftoppm/ImageMagick for rendering.
+    For quick previews without external dependencies, use
+    get_presentation_thumbnail() instead.
+
+    Args:
+        presentation: The presentation to process
+        slide_number: The slide number (1-indexed)
+        width: Thumbnail width in pixels (default 320)
+        height: Thumbnail height in pixels (default 240)
+        format: Image format - "png" or "jpg" (default "png")
+
+    Returns:
+        Image data as bytes, or None if generation failed
+
+    Example:
+        >>> thumb = get_slide_thumbnail(pres, 1, width=200, height=150)
+        >>> if thumb:
+        ...     with open("slide1_thumb.png", "wb") as f:
+        ...         f.write(thumb)
+    """
+    import tempfile
+    from pathlib import Path
+
+    from .export import export_slide_to_image
+
+    # Validate slide number
+    if slide_number < 1 or slide_number > presentation.slide_count:
+        return None
+
+    # Create temporary file for the thumbnail
+    with tempfile.NamedTemporaryFile(
+        suffix=f".{format}", delete=False
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+
+    try:
+        # Use export function to generate thumbnail
+        export_slide_to_image(
+            presentation,
+            slide_number,
+            tmp_path,
+            format=format,
+            width=width,
+            height=height,
+        )
+
+        # Read the generated image
+        if tmp_path.exists():
+            with open(tmp_path, "rb") as f:
+                return f.read()
+        return None
+
+    except RuntimeError:
+        # Export tools not available
+        return None
+
+    finally:
+        # Clean up temp file
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
+def save_slide_thumbnail(
+    presentation: Presentation,
+    slide_number: int,
+    output_path: str,
+    *,
+    width: int = 320,
+    height: int = 240,
+) -> bool:
+    """Save a slide thumbnail to a file.
+
+    Requires LibreOffice and pdftoppm/ImageMagick for rendering.
+
+    Args:
+        presentation: The presentation to process
+        slide_number: The slide number (1-indexed)
+        output_path: Path for the output image file
+        width: Thumbnail width in pixels (default 320)
+        height: Thumbnail height in pixels (default 240)
+
+    Returns:
+        True if saved successfully, False otherwise
+
+    Example:
+        >>> success = save_slide_thumbnail(pres, 1, "thumb.png")
+        >>> if success:
+        ...     print("Thumbnail saved!")
+    """
+    from pathlib import Path
+
+    from .export import export_slide_to_image
+
+    # Validate slide number
+    if slide_number < 1 or slide_number > presentation.slide_count:
+        return False
+
+    output = Path(output_path)
+
+    # Determine format from extension
+    ext = output.suffix.lower().lstrip(".")
+    if ext in ("jpg", "jpeg"):
+        fmt = "jpg"
+    elif ext == "gif":
+        fmt = "gif"
+    else:
+        fmt = "png"
+
+    try:
+        export_slide_to_image(
+            presentation,
+            slide_number,
+            output,
+            format=fmt,
+            width=width,
+            height=height,
+        )
+        return output.exists()
+
+    except RuntimeError:
+        return False
+
+
+def get_all_thumbnails(
+    presentation: Presentation,
+    output_dir: str | None = None,
+    *,
+    width: int = 320,
+    height: int = 240,
+    format: str = "png",
+) -> list[bytes] | list[str]:
+    """Generate thumbnails for all slides.
+
+    If output_dir is provided, saves files and returns paths.
+    Otherwise, returns list of image data as bytes.
+
+    Requires LibreOffice and pdftoppm/ImageMagick for rendering.
+
+    Args:
+        presentation: The presentation to process
+        output_dir: Directory to save thumbnails (optional)
+        width: Thumbnail width in pixels (default 320)
+        height: Thumbnail height in pixels (default 240)
+        format: Image format - "png" or "jpg" (default "png")
+
+    Returns:
+        If output_dir is None: List of image data as bytes
+        If output_dir is provided: List of output file paths
+
+    Example:
+        >>> # Get as bytes
+        >>> thumbnails = get_all_thumbnails(pres, width=200, height=150)
+        >>> for i, thumb in enumerate(thumbnails):
+        ...     print(f"Slide {i+1}: {len(thumb)} bytes")
+
+        >>> # Save to files
+        >>> paths = get_all_thumbnails(pres, "thumbs/", format="jpg")
+        >>> for path in paths:
+        ...     print(f"Saved: {path}")
+    """
+    from pathlib import Path
+
+    from .export import export_all_slides
+
+    num_slides = presentation.slide_count
+    if num_slides == 0:
+        return []
+
+    if output_dir is not None:
+        # Save to files
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+
+        try:
+            paths = export_all_slides(
+                presentation,
+                output,
+                format=format,
+                prefix="thumb",
+                width=width,
+                height=height,
+            )
+            return [str(p) for p in paths]
+
+        except RuntimeError:
+            return []
+
+    else:
+        # Return as bytes
+        results = []
+        for slide_num in range(1, num_slides + 1):
+            thumb = get_slide_thumbnail(
+                presentation,
+                slide_num,
+                width=width,
+                height=height,
+                format=format,
+            )
+            if thumb:
+                results.append(thumb)
+
+        return results
