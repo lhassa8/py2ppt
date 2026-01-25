@@ -937,3 +937,375 @@ def update_chart_data(
 
     # Update the chart part
     pkg.set_part(chart_path, new_chart.to_xml(), CONTENT_TYPE.CHART)
+
+
+# Video content type mapping
+VIDEO_CONTENT_TYPES = {
+    ".mp4": CONTENT_TYPE.MP4,
+    ".m4v": CONTENT_TYPE.M4V,
+    ".mov": CONTENT_TYPE.MOV,
+    ".wmv": CONTENT_TYPE.WMV,
+    ".avi": CONTENT_TYPE.AVI,
+    ".webm": CONTENT_TYPE.WEBM,
+}
+
+# Audio content type mapping
+AUDIO_CONTENT_TYPES = {
+    ".mp3": CONTENT_TYPE.MP3,
+    ".m4a": CONTENT_TYPE.M4A,
+    ".wav": CONTENT_TYPE.WAV,
+    ".wma": CONTENT_TYPE.WMA,
+    ".aac": CONTENT_TYPE.AAC,
+}
+
+
+def add_video(
+    presentation: Presentation,
+    slide_number: int,
+    video_path: str | Path,
+    *,
+    placeholder: str | None = None,
+    left: str | int | None = None,
+    top: str | int | None = None,
+    width: str | int | None = None,
+    height: str | int | None = None,
+    poster_image: str | Path | None = None,
+) -> int:
+    """Add a video to a slide.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        video_path: Path to the video file (MP4, MOV, WMV, etc.)
+        placeholder: Placeholder to fill (e.g., "content", "media").
+                    If provided, video will use placeholder's position.
+        left: Left position (e.g., "1in", "2.5cm") - ignored if placeholder set
+        top: Top position - ignored if placeholder set
+        width: Video width - ignored if placeholder set
+        height: Video height - ignored if placeholder set
+        poster_image: Optional path to poster image (shown when video not playing)
+
+    Returns:
+        Shape ID of the added video
+
+    Example:
+        >>> # Simple video
+        >>> add_video(pres, 3, "demo.mp4",
+        ...     left="1in", top="1in", width="8in", height="4.5in")
+
+        >>> # Video with poster image
+        >>> add_video(pres, 3, "intro.mp4",
+        ...     placeholder="content",
+        ...     poster_image="intro_thumbnail.png")
+    """
+    from ..oxml.shapes import Video
+
+    video_path = Path(video_path)
+
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    # Read video data
+    with open(video_path, "rb") as f:
+        video_data = f.read()
+
+    # Determine content type
+    ext = video_path.suffix.lower()
+    content_type = VIDEO_CONTENT_TYPES.get(ext)
+    if content_type is None:
+        raise ValueError(f"Unsupported video format: {ext}")
+
+    # Add video to package
+    pkg = presentation._package
+
+    # Find next available media number
+    existing_media = [
+        name for name, _ in pkg.iter_parts()
+        if name.startswith("ppt/media/")
+    ]
+    media_num = len(existing_media) + 1
+    video_part_name = f"ppt/media/media{media_num}{ext}"
+
+    pkg.set_part(video_part_name, video_data, content_type)
+
+    # Get slide and determine position
+    slide = presentation.get_slide(slide_number)
+
+    if placeholder:
+        ph_shape = slide._find_placeholder(placeholder)
+        position = ph_shape.position
+    elif left is not None and top is not None:
+        position = Position(
+            x=int(parse_length(left)),
+            y=int(parse_length(top)),
+            cx=int(parse_length(width or "6in")),
+            cy=int(parse_length(height or "4in")),
+        )
+    else:
+        # Default position (centered)
+        position = Position(
+            x=presentation.slide_width // 6,
+            y=presentation.slide_height // 6,
+            cx=int(presentation.slide_width * 0.67),
+            cy=int(presentation.slide_height * 0.67),
+        )
+
+    # Get slide path and add relationships
+    slide_refs = presentation._presentation.get_slide_refs()
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_rels = pkg.get_part_rels(slide_path)
+
+    # Add video relationship
+    video_r_id = slide_rels.add(
+        rel_type=REL_TYPE.VIDEO,
+        target=f"../media/media{media_num}{ext}",
+    )
+
+    # Also add media relationship (required for PowerPoint 2010+)
+    slide_rels.add(
+        rel_type=REL_TYPE.MEDIA,
+        target=f"../media/media{media_num}{ext}",
+    )
+
+    # Handle poster image
+    poster_r_id = ""
+    if poster_image:
+        poster_path = Path(poster_image)
+        if poster_path.exists():
+            with open(poster_path, "rb") as f:
+                poster_data = f.read()
+
+            poster_ext = poster_path.suffix.lower()
+            poster_content_types = {
+                ".png": CONTENT_TYPE.PNG,
+                ".jpg": CONTENT_TYPE.JPEG,
+                ".jpeg": CONTENT_TYPE.JPEG,
+            }
+            poster_ct = poster_content_types.get(poster_ext, CONTENT_TYPE.PNG)
+
+            media_num += 1
+            poster_part_name = f"ppt/media/image{media_num}{poster_ext}"
+            pkg.set_part(poster_part_name, poster_data, poster_ct)
+
+            poster_r_id = slide_rels.add(
+                rel_type=REL_TYPE.IMAGE,
+                target=f"../media/image{media_num}{poster_ext}",
+            )
+
+    pkg.set_part_rels(slide_path, slide_rels)
+
+    # Create video shape
+    video_shape = Video(
+        id=slide._part.shape_tree._next_id,
+        name=f"Video {media_num}",
+        position=position,
+        r_embed=video_r_id,
+        poster_r_embed=poster_r_id,
+    )
+
+    slide._part.shape_tree.add_shape(video_shape)
+    slide._save()
+
+    return video_shape.id
+
+
+def add_audio(
+    presentation: Presentation,
+    slide_number: int,
+    audio_path: str | Path,
+    *,
+    left: str | int | None = None,
+    top: str | int | None = None,
+    width: str | int | None = None,
+    height: str | int | None = None,
+    icon_image: str | Path | None = None,
+) -> int:
+    """Add an audio file to a slide.
+
+    Audio appears as an icon on the slide. Click to play.
+
+    Args:
+        presentation: The presentation to modify
+        slide_number: The slide number (1-indexed)
+        audio_path: Path to the audio file (MP3, WAV, M4A, etc.)
+        left: Left position for the audio icon (e.g., "1in", "2.5cm")
+        top: Top position for the audio icon
+        width: Icon width (default "1in")
+        height: Icon height (default "1in")
+        icon_image: Optional path to custom audio icon image
+
+    Returns:
+        Shape ID of the added audio
+
+    Example:
+        >>> # Add audio with default icon
+        >>> add_audio(pres, 3, "background_music.mp3",
+        ...     left="0.5in", top="0.5in")
+
+        >>> # Audio with custom icon
+        >>> add_audio(pres, 3, "narration.mp3",
+        ...     left="9in", top="6in",
+        ...     icon_image="speaker_icon.png")
+    """
+    from ..oxml.shapes import Audio
+
+    audio_path = Path(audio_path)
+
+    if not audio_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    # Read audio data
+    with open(audio_path, "rb") as f:
+        audio_data = f.read()
+
+    # Determine content type
+    ext = audio_path.suffix.lower()
+    content_type = AUDIO_CONTENT_TYPES.get(ext)
+    if content_type is None:
+        raise ValueError(f"Unsupported audio format: {ext}")
+
+    # Add audio to package
+    pkg = presentation._package
+
+    # Find next available media number
+    existing_media = [
+        name for name, _ in pkg.iter_parts()
+        if name.startswith("ppt/media/")
+    ]
+    media_num = len(existing_media) + 1
+    audio_part_name = f"ppt/media/media{media_num}{ext}"
+
+    pkg.set_part(audio_part_name, audio_data, content_type)
+
+    # Get slide and determine position
+    slide = presentation.get_slide(slide_number)
+
+    # Default audio icon position and size
+    position = Position(
+        x=int(parse_length(left or "0.5in")),
+        y=int(parse_length(top or "0.5in")),
+        cx=int(parse_length(width or "1in")),
+        cy=int(parse_length(height or "1in")),
+    )
+
+    # Get slide path and add relationships
+    slide_refs = presentation._presentation.get_slide_refs()
+    slide_ref = slide_refs[slide_number - 1]
+    pres_rels = pkg.get_part_rels("ppt/presentation.xml")
+    rel = pres_rels.get(slide_ref.r_id)
+
+    if rel.target.startswith("/"):
+        slide_path = rel.target.lstrip("/")
+    else:
+        slide_path = f"ppt/{rel.target}"
+
+    slide_rels = pkg.get_part_rels(slide_path)
+
+    # Add audio relationship
+    audio_r_id = slide_rels.add(
+        rel_type=REL_TYPE.AUDIO,
+        target=f"../media/media{media_num}{ext}",
+    )
+
+    # Also add media relationship (required for PowerPoint 2010+)
+    slide_rels.add(
+        rel_type=REL_TYPE.MEDIA,
+        target=f"../media/media{media_num}{ext}",
+    )
+
+    # Handle icon image
+    icon_r_id = ""
+    if icon_image:
+        icon_path = Path(icon_image)
+        if icon_path.exists():
+            with open(icon_path, "rb") as f:
+                icon_data = f.read()
+
+            icon_ext = icon_path.suffix.lower()
+            icon_content_types = {
+                ".png": CONTENT_TYPE.PNG,
+                ".jpg": CONTENT_TYPE.JPEG,
+                ".jpeg": CONTENT_TYPE.JPEG,
+            }
+            icon_ct = icon_content_types.get(icon_ext, CONTENT_TYPE.PNG)
+
+            media_num += 1
+            icon_part_name = f"ppt/media/image{media_num}{icon_ext}"
+            pkg.set_part(icon_part_name, icon_data, icon_ct)
+
+            icon_r_id = slide_rels.add(
+                rel_type=REL_TYPE.IMAGE,
+                target=f"../media/image{media_num}{icon_ext}",
+            )
+
+    pkg.set_part_rels(slide_path, slide_rels)
+
+    # Create audio shape
+    audio_shape = Audio(
+        id=slide._part.shape_tree._next_id,
+        name=f"Audio {media_num}",
+        position=position,
+        r_embed=audio_r_id,
+        icon_r_embed=icon_r_id,
+    )
+
+    slide._part.shape_tree.add_shape(audio_shape)
+    slide._save()
+
+    return audio_shape.id
+
+
+def get_media_shapes(
+    presentation: Presentation,
+    slide_number: int,
+) -> list[dict]:
+    """Get all media (video and audio) shapes on a slide.
+
+    Args:
+        presentation: The presentation to inspect
+        slide_number: The slide number (1-indexed)
+
+    Returns:
+        List of dicts with media info (id, name, type, position)
+
+    Example:
+        >>> media = get_media_shapes(pres, 1)
+        >>> for m in media:
+        ...     print(f"{m['type']}: {m['name']}")
+    """
+    from ..oxml.shapes import Audio, Video
+
+    slide = presentation.get_slide(slide_number)
+    media_shapes = []
+
+    for shape in slide.shapes:
+        if isinstance(shape, Video):
+            media_shapes.append({
+                "id": shape.id,
+                "name": shape.name,
+                "type": "video",
+                "left": shape.position.x,
+                "top": shape.position.y,
+                "width": shape.position.cx,
+                "height": shape.position.cy,
+            })
+        elif isinstance(shape, Audio):
+            media_shapes.append({
+                "id": shape.id,
+                "name": shape.name,
+                "type": "audio",
+                "left": shape.position.x,
+                "top": shape.position.y,
+                "width": shape.position.cx,
+                "height": shape.position.cy,
+            })
+
+    return media_shapes

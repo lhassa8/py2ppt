@@ -992,21 +992,25 @@ class ShapeTree:
     """Collection of shapes on a slide (p:spTree)."""
 
     def __init__(self) -> None:
-        self._shapes: list[Shape | Picture | Table | Chart] = []
+        self._shapes: list[Shape | Picture | Table | Chart | Video | Audio] = []
         self._next_id: int = 2  # ID 1 is typically used for spTree itself
 
     @property
-    def shapes(self) -> list[Shape | Picture | Table | Chart]:
+    def shapes(self) -> list[Shape | Picture | Table | Chart | Video | Audio]:
         return self._shapes
 
-    def get_shape_by_id(self, shape_id: int) -> Shape | Picture | Table | Chart | None:
+    def get_shape_by_id(
+        self, shape_id: int
+    ) -> Shape | Picture | Table | Chart | Video | Audio | None:
         """Find shape by ID."""
         for shape in self._shapes:
             if shape.id == shape_id:
                 return shape
         return None
 
-    def get_shape_by_name(self, name: str) -> Shape | Picture | Table | Chart | None:
+    def get_shape_by_name(
+        self, name: str
+    ) -> Shape | Picture | Table | Chart | Video | Audio | None:
         """Find shape by name."""
         for shape in self._shapes:
             if shape.name == name:
@@ -1032,7 +1036,7 @@ class ShapeTree:
             s for s in self._shapes if isinstance(s, Shape) and s.placeholder is not None
         ]
 
-    def add_shape(self, shape: Shape | Picture | Table | Chart) -> None:
+    def add_shape(self, shape: Shape | Picture | Table | Chart | Video | Audio) -> None:
         """Add a shape to the tree."""
         if shape.id == 0:
             shape.id = self._next_id
@@ -1041,7 +1045,7 @@ class ShapeTree:
             self._next_id = shape.id + 1
         self._shapes.append(shape)
 
-    def remove_shape(self, shape: Shape | Picture | Table | Chart) -> bool:
+    def remove_shape(self, shape: Shape | Picture | Table | Chart | Video | Audio) -> bool:
         """Remove a shape from the tree."""
         if shape in self._shapes:
             self._shapes.remove(shape)
@@ -1092,8 +1096,21 @@ class ShapeTree:
             shape = Shape.from_element(sp_elem)
             tree.add_shape(shape)
 
-        # Parse pictures (pic)
+        # Parse pictures (pic) - may be images, videos, or audio
         for pic_elem in elem.findall(qn("p:pic")):
+            # Try video first (has p14:media element)
+            video = Video.from_element(pic_elem)
+            if video:
+                tree.add_shape(video)
+                continue
+
+            # Try audio (also has p14:media element but different content type)
+            audio = Audio.from_element(pic_elem)
+            if audio:
+                tree.add_shape(audio)
+                continue
+
+            # Otherwise it's a regular picture
             pic = Picture.from_element(pic_elem)
             tree.add_shape(pic)
 
@@ -1212,3 +1229,243 @@ def create_text_box(
         text_frame=tf,
         preset_geometry="rect",
     )
+
+
+@dataclass
+class Video:
+    """A video (p:pic with video) in a slide.
+
+    Attributes:
+        id: Shape ID
+        name: Shape name
+        position: Position and size
+        r_embed: Relationship ID to video part
+        r_link: Relationship ID for external video link
+        poster_r_embed: Relationship ID to poster image
+        placeholder: Placeholder info if in placeholder
+    """
+
+    id: int
+    name: str
+    position: Position = field(default_factory=Position)
+    r_embed: str = ""  # Relationship ID to video part
+    r_link: str = ""  # Relationship ID for external video link
+    poster_r_embed: str = ""  # Relationship ID to poster image
+    placeholder: PlaceholderInfo | None = None
+
+    def to_element(self) -> etree._Element:
+        """Create p:pic element with video."""
+        pic = etree.Element(qn("p:pic"))
+
+        # Non-visual properties
+        nv_pic_pr = etree.SubElement(pic, qn("p:nvPicPr"))
+
+        c_nv_pr = etree.SubElement(nv_pic_pr, qn("p:cNvPr"))
+        c_nv_pr.set("id", str(self.id))
+        c_nv_pr.set("name", self.name)
+
+        # Add video link
+        a_vf = etree.SubElement(c_nv_pr, qn("a:hlinkClick"))
+        a_vf.set(qn("r:id"), "")
+        a_vf.set("action", "ppaction://media")
+
+        etree.SubElement(nv_pic_pr, qn("p:cNvPicPr"))
+
+        # nvPr with media link
+        nv_pr = etree.SubElement(nv_pic_pr, qn("p:nvPr"))
+        if self.placeholder:
+            nv_pr.append(self.placeholder.to_element())
+
+        # Add p14:media element for video
+        p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+        ext_lst = etree.SubElement(nv_pr, qn("p:extLst"))
+        ext = etree.SubElement(ext_lst, qn("p:ext"))
+        ext.set("uri", "{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}")
+
+        p14_media = etree.SubElement(ext, f"{{{p14_ns}}}media")
+        if self.r_embed:
+            p14_media.set(qn("r:embed"), self.r_embed)
+        if self.r_link:
+            p14_media.set(qn("r:link"), self.r_link)
+
+        # Blip fill with poster image
+        blip_fill = etree.SubElement(pic, qn("p:blipFill"))
+        blip = etree.SubElement(blip_fill, qn("a:blip"))
+        if self.poster_r_embed:
+            blip.set(qn("r:embed"), self.poster_r_embed)
+
+        stretch = etree.SubElement(blip_fill, qn("a:stretch"))
+        etree.SubElement(stretch, qn("a:fillRect"))
+
+        # Shape properties
+        sp_pr = etree.SubElement(pic, qn("p:spPr"))
+        xfrm = etree.SubElement(sp_pr, qn("a:xfrm"))
+        off, ext_elem = self.position.to_element()
+        xfrm.append(off)
+        xfrm.append(ext_elem)
+
+        prst_geom = etree.SubElement(sp_pr, qn("a:prstGeom"))
+        prst_geom.set("prst", "rect")
+        etree.SubElement(prst_geom, qn("a:avLst"))
+
+        return pic
+
+    @classmethod
+    def from_element(cls, elem: etree._Element) -> Video | None:
+        """Parse p:pic element containing video."""
+        # Check if this is a video (has p14:media element)
+        p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+        media_elem = elem.find(f".//{{{p14_ns}}}media")
+        if media_elem is None:
+            return None
+
+        c_nv_pr = elem.find(f".//{qn('p:cNvPr')}")
+        vid_id = int(c_nv_pr.get("id", "0")) if c_nv_pr is not None else 0
+        name = c_nv_pr.get("name", "") if c_nv_pr is not None else ""
+
+        ph_elem = elem.find(f".//{qn('p:ph')}")
+        placeholder = PlaceholderInfo.from_element(ph_elem)
+
+        xfrm = elem.find(f".//{qn('a:xfrm')}")
+        if xfrm is not None:
+            off = xfrm.find(qn("a:off"))
+            ext = xfrm.find(qn("a:ext"))
+            position = Position.from_elements(off, ext)
+        else:
+            position = Position()
+
+        r_embed = media_elem.get(qn("r:embed"), "")
+        r_link = media_elem.get(qn("r:link"), "")
+
+        blip = elem.find(f".//{qn('a:blip')}")
+        poster_r_embed = blip.get(qn("r:embed"), "") if blip is not None else ""
+
+        return cls(
+            id=vid_id,
+            name=name,
+            position=position,
+            r_embed=r_embed,
+            r_link=r_link,
+            poster_r_embed=poster_r_embed,
+            placeholder=placeholder,
+        )
+
+
+@dataclass
+class Audio:
+    """An audio (p:pic with audio) in a slide.
+
+    Attributes:
+        id: Shape ID
+        name: Shape name
+        position: Position and size for the audio icon
+        r_embed: Relationship ID to audio part
+        r_link: Relationship ID for external audio link
+        icon_r_embed: Relationship ID to audio icon image
+        placeholder: Placeholder info if in placeholder
+    """
+
+    id: int
+    name: str
+    position: Position = field(default_factory=Position)
+    r_embed: str = ""  # Relationship ID to audio part
+    r_link: str = ""  # Relationship ID for external audio link
+    icon_r_embed: str = ""  # Relationship ID to audio icon image
+    placeholder: PlaceholderInfo | None = None
+
+    def to_element(self) -> etree._Element:
+        """Create p:pic element with audio."""
+        pic = etree.Element(qn("p:pic"))
+
+        # Non-visual properties
+        nv_pic_pr = etree.SubElement(pic, qn("p:nvPicPr"))
+
+        c_nv_pr = etree.SubElement(nv_pic_pr, qn("p:cNvPr"))
+        c_nv_pr.set("id", str(self.id))
+        c_nv_pr.set("name", self.name)
+
+        # Add audio link
+        a_vf = etree.SubElement(c_nv_pr, qn("a:hlinkClick"))
+        a_vf.set(qn("r:id"), "")
+        a_vf.set("action", "ppaction://media")
+
+        etree.SubElement(nv_pic_pr, qn("p:cNvPicPr"))
+
+        # nvPr with media link
+        nv_pr = etree.SubElement(nv_pic_pr, qn("p:nvPr"))
+        if self.placeholder:
+            nv_pr.append(self.placeholder.to_element())
+
+        # Add p14:media element for audio
+        p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+        ext_lst = etree.SubElement(nv_pr, qn("p:extLst"))
+        ext = etree.SubElement(ext_lst, qn("p:ext"))
+        ext.set("uri", "{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}")
+
+        p14_media = etree.SubElement(ext, f"{{{p14_ns}}}media")
+        if self.r_embed:
+            p14_media.set(qn("r:embed"), self.r_embed)
+        if self.r_link:
+            p14_media.set(qn("r:link"), self.r_link)
+
+        # Blip fill with audio icon
+        blip_fill = etree.SubElement(pic, qn("p:blipFill"))
+        blip = etree.SubElement(blip_fill, qn("a:blip"))
+        if self.icon_r_embed:
+            blip.set(qn("r:embed"), self.icon_r_embed)
+
+        stretch = etree.SubElement(blip_fill, qn("a:stretch"))
+        etree.SubElement(stretch, qn("a:fillRect"))
+
+        # Shape properties
+        sp_pr = etree.SubElement(pic, qn("p:spPr"))
+        xfrm = etree.SubElement(sp_pr, qn("a:xfrm"))
+        off, ext_elem = self.position.to_element()
+        xfrm.append(off)
+        xfrm.append(ext_elem)
+
+        prst_geom = etree.SubElement(sp_pr, qn("a:prstGeom"))
+        prst_geom.set("prst", "rect")
+        etree.SubElement(prst_geom, qn("a:avLst"))
+
+        return pic
+
+    @classmethod
+    def from_element(cls, elem: etree._Element) -> Audio | None:
+        """Parse p:pic element containing audio."""
+        # Audio uses same structure as video - check for media
+        p14_ns = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+        media_elem = elem.find(f".//{{{p14_ns}}}media")
+        if media_elem is None:
+            return None
+
+        c_nv_pr = elem.find(f".//{qn('p:cNvPr')}")
+        aud_id = int(c_nv_pr.get("id", "0")) if c_nv_pr is not None else 0
+        name = c_nv_pr.get("name", "") if c_nv_pr is not None else ""
+
+        ph_elem = elem.find(f".//{qn('p:ph')}")
+        placeholder = PlaceholderInfo.from_element(ph_elem)
+
+        xfrm = elem.find(f".//{qn('a:xfrm')}")
+        if xfrm is not None:
+            off = xfrm.find(qn("a:off"))
+            ext = xfrm.find(qn("a:ext"))
+            position = Position.from_elements(off, ext)
+        else:
+            position = Position()
+
+        r_embed = media_elem.get(qn("r:embed"), "")
+        r_link = media_elem.get(qn("r:link"), "")
+
+        blip = elem.find(f".//{qn('a:blip')}")
+        icon_r_embed = blip.get(qn("r:embed"), "") if blip is not None else ""
+
+        return cls(
+            id=aud_id,
+            name=name,
+            position=position,
+            r_embed=r_embed,
+            r_link=r_link,
+            icon_r_embed=icon_r_embed,
+            placeholder=placeholder,
+        )

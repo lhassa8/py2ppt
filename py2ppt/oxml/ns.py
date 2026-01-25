@@ -129,6 +129,9 @@ class REL_TYPE:
     HYPERLINK = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
     CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
     TAGS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tags"
+    VIDEO = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video"
+    AUDIO = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio"
+    MEDIA = "http://schemas.microsoft.com/office/2007/relationships/media"
 
 
 # Content types
@@ -178,3 +181,18 @@ class CONTENT_TYPE:
     DIAGRAM_DATA = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"
     DIAGRAM_LAYOUT = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"
     DIAGRAM_STYLE = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"
+
+    # Video
+    MP4 = "video/mp4"
+    M4V = "video/x-m4v"
+    MOV = "video/quicktime"
+    WMV = "video/x-ms-wmv"
+    AVI = "video/avi"
+    WEBM = "video/webm"
+
+    # Audio
+    MP3 = "audio/mpeg"
+    M4A = "audio/mp4"
+    WAV = "audio/wav"
+    WMA = "audio/x-ms-wma"
+    AAC = "audio/aac"

@@ -44,11 +44,14 @@ from .inspection import (
     list_layouts,
 )
 from .media import (
+    add_audio,
     add_chart,
     add_image,
     add_table,
+    add_video,
     crop_image,
     flip_image,
+    get_media_shapes,
     merge_table_cells,
     rotate_image,
     style_table_cell,
@@ -154,6 +157,10 @@ __all__ = [
     "flip_image",
     "add_chart",
     "update_chart_data",
+    # Video/Audio
+    "add_video",
+    "add_audio",
+    "get_media_shapes",
     # Inspection tools
     "list_layouts",
     "describe_slide",
