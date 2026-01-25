@@ -104,9 +104,16 @@ from .tools.media import (
 )
 from .tools.presentation import (
     create_presentation,
+    get_custom_properties,
+    get_custom_property,
+    get_document_info,
+    get_document_property,
     get_slide_size,
     open_presentation,
+    remove_custom_property,
     save_presentation,
+    set_custom_property,
+    set_document_property,
     set_slide_size,
     set_slide_size_preset,
 )
@@ -185,6 +192,14 @@ __all__ = [
     "get_slide_size",
     "set_slide_size",
     "set_slide_size_preset",
+    # Document properties
+    "set_document_property",
+    "get_document_property",
+    "get_document_info",
+    "set_custom_property",
+    "get_custom_property",
+    "get_custom_properties",
+    "remove_custom_property",
 
     # Slide tools
     "add_slide",

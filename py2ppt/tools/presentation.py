@@ -215,3 +215,452 @@ def set_slide_size_preset(
 
     width, height = dimensions
     set_slide_size(presentation, width, height)
+
+
+# ============================================================================
+# Document Properties
+# ============================================================================
+
+
+def set_document_property(
+    presentation: Presentation,
+    name: str,
+    value: str,
+) -> None:
+    """Set a document property (core metadata).
+
+    Args:
+        presentation: The presentation to modify
+        name: Property name. Standard properties:
+            - "title": Document title
+            - "author" or "creator": Document author
+            - "subject": Document subject
+            - "description": Document description
+            - "keywords": Keywords (comma-separated)
+            - "category": Document category
+            - "last_modified_by": Last editor
+        value: Property value
+
+    Example:
+        >>> set_document_property(pres, "title", "Q4 Report")
+        >>> set_document_property(pres, "author", "John Smith")
+        >>> set_document_property(pres, "keywords", "quarterly, finance, report")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import CONTENT_TYPE, qn
+
+    pkg = presentation._package
+
+    # Get or create core properties
+    core_xml = pkg.get_part("docProps/core.xml")
+
+    if core_xml is None:
+        # Create minimal core.xml
+        core_xml = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:dcterms="http://purl.org/dc/terms/"
+    xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+</cp:coreProperties>'''
+
+    root = etree.fromstring(core_xml)
+
+    # Map property names to XML elements
+    property_map = {
+        "title": "dc:title",
+        "author": "dc:creator",
+        "creator": "dc:creator",
+        "subject": "dc:subject",
+        "description": "dc:description",
+        "keywords": "cp:keywords",
+        "category": "cp:category",
+        "last_modified_by": "cp:lastModifiedBy",
+        "lastmodifiedby": "cp:lastModifiedBy",
+    }
+
+    prop_name = name.lower().replace(" ", "_").replace("-", "_")
+    xml_tag = property_map.get(prop_name)
+
+    if xml_tag is None:
+        raise ValueError(
+            f"Unknown property: {name}. "
+            f"Available: {', '.join(property_map.keys())}"
+        )
+
+    # Find or create the element
+    elem = root.find(qn(xml_tag))
+    if elem is None:
+        elem = etree.SubElement(root, qn(xml_tag))
+
+    elem.text = value
+
+    # Save
+    xml_bytes = etree.tostring(
+        root,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+    pkg.set_part("docProps/core.xml", xml_bytes, CONTENT_TYPE.CORE_PROPS)
+    presentation._dirty = True
+
+
+def get_document_property(
+    presentation: Presentation,
+    name: str,
+) -> str | None:
+    """Get a document property value.
+
+    Args:
+        presentation: The presentation to inspect
+        name: Property name (see set_document_property for options)
+
+    Returns:
+        Property value or None if not set
+
+    Example:
+        >>> title = get_document_property(pres, "title")
+        >>> author = get_document_property(pres, "author")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    pkg = presentation._package
+    core_xml = pkg.get_part("docProps/core.xml")
+
+    if core_xml is None:
+        return None
+
+    root = etree.fromstring(core_xml)
+
+    property_map = {
+        "title": "dc:title",
+        "author": "dc:creator",
+        "creator": "dc:creator",
+        "subject": "dc:subject",
+        "description": "dc:description",
+        "keywords": "cp:keywords",
+        "category": "cp:category",
+        "last_modified_by": "cp:lastModifiedBy",
+        "lastmodifiedby": "cp:lastModifiedBy",
+    }
+
+    prop_name = name.lower().replace(" ", "_").replace("-", "_")
+    xml_tag = property_map.get(prop_name)
+
+    if xml_tag is None:
+        return None
+
+    elem = root.find(qn(xml_tag))
+    return elem.text if elem is not None else None
+
+
+def get_document_info(presentation: Presentation) -> dict:
+    """Get all document properties.
+
+    Returns:
+        Dict with all available document metadata
+
+    Example:
+        >>> info = get_document_info(pres)
+        >>> print(f"Title: {info.get('title')}")
+        >>> print(f"Author: {info.get('author')}")
+    """
+    from lxml import etree
+
+    from ..oxml.ns import qn
+
+    pkg = presentation._package
+    info = {}
+
+    # Core properties
+    core_xml = pkg.get_part("docProps/core.xml")
+    if core_xml is not None:
+        root = etree.fromstring(core_xml)
+
+        property_map = {
+            "dc:title": "title",
+            "dc:creator": "author",
+            "dc:subject": "subject",
+            "dc:description": "description",
+            "cp:keywords": "keywords",
+            "cp:category": "category",
+            "cp:lastModifiedBy": "last_modified_by",
+            "dcterms:created": "created",
+            "dcterms:modified": "modified",
+        }
+
+        for xml_tag, prop_name in property_map.items():
+            elem = root.find(qn(xml_tag))
+            if elem is not None and elem.text:
+                info[prop_name] = elem.text
+
+    # Extended properties (app.xml)
+    app_xml = pkg.get_part("docProps/app.xml")
+    if app_xml is not None:
+        root = etree.fromstring(app_xml)
+        ns = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+
+        for tag, key in [
+            ("Application", "application"),
+            ("Company", "company"),
+            ("Slides", "slide_count"),
+            ("Notes", "notes_count"),
+            ("HiddenSlides", "hidden_slides"),
+        ]:
+            elem = root.find(f"{{{ns}}}{tag}")
+            if elem is not None and elem.text:
+                info[key] = elem.text
+
+    return info
+
+
+def set_custom_property(
+    presentation: Presentation,
+    name: str,
+    value: str | int | float | bool,
+) -> None:
+    """Set a custom document property.
+
+    Custom properties allow storing arbitrary metadata.
+
+    Args:
+        presentation: The presentation to modify
+        name: Property name (any string)
+        value: Property value (string, int, float, or bool)
+
+    Example:
+        >>> set_custom_property(pres, "Project Code", "PRJ-2024-001")
+        >>> set_custom_property(pres, "Approved", True)
+        >>> set_custom_property(pres, "Version", 2.5)
+    """
+    from lxml import etree
+
+    pkg = presentation._package
+
+    custom_ns = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+    vt_ns = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"
+
+    # Get or create custom properties
+    custom_xml = pkg.get_part("docProps/custom.xml")
+
+    if custom_xml is None:
+        # Create new custom.xml
+        root = etree.Element(
+            f"{{{custom_ns}}}Properties",
+            nsmap={None: custom_ns, "vt": vt_ns},
+        )
+        next_pid = 2  # PIDs start at 2
+    else:
+        root = etree.fromstring(custom_xml)
+        # Find highest PID
+        pids = [int(p.get("pid", "1")) for p in root]
+        next_pid = max(pids) + 1 if pids else 2
+
+    # Check if property already exists
+    existing = None
+    for prop in root:
+        if prop.get("name") == name:
+            existing = prop
+            break
+
+    if existing is not None:
+        # Update existing
+        root.remove(existing)
+
+    # Determine value type
+    if isinstance(value, bool):
+        vt_type = "bool"
+        vt_value = "true" if value else "false"
+    elif isinstance(value, int):
+        vt_type = "i4"
+        vt_value = str(value)
+    elif isinstance(value, float):
+        vt_type = "r8"
+        vt_value = str(value)
+    else:
+        vt_type = "lpwstr"
+        vt_value = str(value)
+
+    # Create property element
+    prop = etree.SubElement(
+        root,
+        f"{{{custom_ns}}}property",
+        attrib={
+            "fmtid": "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
+            "pid": str(next_pid if existing is None else existing.get("pid")),
+            "name": name,
+        },
+    )
+
+    value_elem = etree.SubElement(prop, f"{{{vt_ns}}}{vt_type}")
+    value_elem.text = vt_value
+
+    # Save
+    xml_bytes = etree.tostring(
+        root,
+        xml_declaration=True,
+        encoding="UTF-8",
+        standalone=True,
+    )
+
+    content_type = "application/vnd.openxmlformats-officedocument.custom-properties+xml"
+    pkg.set_part("docProps/custom.xml", xml_bytes, content_type)
+
+    # Add relationship if needed
+    # Check if custom props relationship exists
+    has_custom_rel = any(
+        r.target == "docProps/custom.xml" for r in pkg.package_rels
+    )
+    if not has_custom_rel:
+        pkg.package_rels.add(
+            rel_type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+            target="docProps/custom.xml",
+        )
+
+    presentation._dirty = True
+
+
+def get_custom_property(
+    presentation: Presentation,
+    name: str,
+) -> str | int | float | bool | None:
+    """Get a custom document property value.
+
+    Args:
+        presentation: The presentation to inspect
+        name: Property name
+
+    Returns:
+        Property value (typed appropriately) or None if not found
+
+    Example:
+        >>> code = get_custom_property(pres, "Project Code")
+        >>> approved = get_custom_property(pres, "Approved")
+    """
+    from lxml import etree
+
+    pkg = presentation._package
+    custom_xml = pkg.get_part("docProps/custom.xml")
+
+    if custom_xml is None:
+        return None
+
+    root = etree.fromstring(custom_xml)
+
+    for prop in root:
+        if prop.get("name") == name:
+            # Find value element
+            for child in prop:
+                tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                text = child.text
+
+                if text is None:
+                    return None
+
+                if tag == "bool":
+                    return text.lower() == "true"
+                elif tag == "i4":
+                    return int(text)
+                elif tag == "r8":
+                    return float(text)
+                else:
+                    return text
+
+    return None
+
+
+def get_custom_properties(presentation: Presentation) -> dict:
+    """Get all custom document properties.
+
+    Returns:
+        Dict of property name -> value
+
+    Example:
+        >>> props = get_custom_properties(pres)
+        >>> for name, value in props.items():
+        ...     print(f"{name}: {value}")
+    """
+    from lxml import etree
+
+    pkg = presentation._package
+    custom_xml = pkg.get_part("docProps/custom.xml")
+
+    if custom_xml is None:
+        return {}
+
+    root = etree.fromstring(custom_xml)
+    props = {}
+
+    for prop in root:
+        name = prop.get("name")
+        if name is None:
+            continue
+
+        # Find value element
+        for child in prop:
+            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            text = child.text
+
+            if text is None:
+                props[name] = None
+            elif tag == "bool":
+                props[name] = text.lower() == "true"
+            elif tag == "i4":
+                props[name] = int(text)
+            elif tag == "r8":
+                props[name] = float(text)
+            else:
+                props[name] = text
+            break
+
+    return props
+
+
+def remove_custom_property(
+    presentation: Presentation,
+    name: str,
+) -> bool:
+    """Remove a custom document property.
+
+    Args:
+        presentation: The presentation to modify
+        name: Property name to remove
+
+    Returns:
+        True if property was removed, False if not found
+
+    Example:
+        >>> remove_custom_property(pres, "Project Code")
+    """
+    from lxml import etree
+
+    pkg = presentation._package
+    custom_xml = pkg.get_part("docProps/custom.xml")
+
+    if custom_xml is None:
+        return False
+
+    root = etree.fromstring(custom_xml)
+
+    # Find and remove property
+    for prop in root:
+        if prop.get("name") == name:
+            root.remove(prop)
+
+            # Save
+            xml_bytes = etree.tostring(
+                root,
+                xml_declaration=True,
+                encoding="UTF-8",
+                standalone=True,
+            )
+            content_type = "application/vnd.openxmlformats-officedocument.custom-properties+xml"
+            pkg.set_part("docProps/custom.xml", xml_bytes, content_type)
+            presentation._dirty = True
+            return True
+
+    return False
