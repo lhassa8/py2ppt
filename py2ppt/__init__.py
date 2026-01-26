@@ -79,6 +79,13 @@ from .formatting import (
     parse_content,
     auto_bullets,
 )
+from .errors import (
+    Py2PptError,
+    SlideNotFoundError,
+    LayoutNotFoundError,
+    ContentOverflowError,
+    InvalidDataError,
+)
 
 __all__ = [
     # Version
@@ -103,4 +110,10 @@ __all__ = [
     "FormattedRun",
     "parse_content",
     "auto_bullets",
+    # Errors
+    "Py2PptError",
+    "SlideNotFoundError",
+    "LayoutNotFoundError",
+    "ContentOverflowError",
+    "InvalidDataError",
 ]
