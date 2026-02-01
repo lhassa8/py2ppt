@@ -7,11 +7,18 @@ AI-readable descriptions of layouts, placeholders, and theme colors.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pptx import Presentation as PptxPresentation
 
-from .layout import LayoutDescription, LayoutRecommendation, analyze_layout, recommend_layout
+if TYPE_CHECKING:
+    from .presentation import Presentation
+
+from .layout import (
+    LayoutDescription,
+    analyze_layout,
+    recommend_layout,
+)
 
 
 class Template:
@@ -38,7 +45,7 @@ class Template:
             raise FileNotFoundError(f"Template not found: {template_path}")
 
         # Load the template with python-pptx
-        self._pptx = PptxPresentation(self._path)
+        self._pptx = PptxPresentation(str(self._path))
 
         # Analyze layouts
         self._layouts: list[LayoutDescription] = []
@@ -54,17 +61,19 @@ class Template:
         for idx, layout in enumerate(self._pptx.slide_layouts):
             # Convert placeholder info to dict format
             placeholders = []
-            for ph in layout.placeholders:
+            for ph in layout.placeholders:  # type: ignore[misc]
                 try:
-                    placeholders.append({
-                        "type": self._get_placeholder_type(ph),
-                        "idx": ph.placeholder_format.idx,
-                        "name": ph.name,
-                        "x": ph.left,
-                        "y": ph.top,
-                        "cx": ph.width,
-                        "cy": ph.height,
-                    })
+                    placeholders.append(
+                        {
+                            "type": self._get_placeholder_type(ph),
+                            "idx": ph.placeholder_format.idx,
+                            "name": ph.name,
+                            "x": ph.left,
+                            "y": ph.top,
+                            "cx": ph.width,
+                            "cy": ph.height,
+                        }
+                    )
                 except Exception:
                     continue
 
@@ -131,7 +140,9 @@ class Template:
                         if major is not None:
                             latin = major.find(f"{ns}latin")
                             if latin is not None:
-                                self._fonts["heading"] = latin.get("typeface", "Calibri Light")
+                                self._fonts["heading"] = latin.get(
+                                    "typeface", "Calibri Light"
+                                )
                         if minor is not None:
                             latin = minor.find(f"{ns}latin")
                             if latin is not None:
@@ -226,7 +237,9 @@ class Template:
 
         for layout in self._layouts:
             ph_names = list(layout.placeholders.keys())
-            lines.append(f"  {layout.index}: {layout.name} ({layout.layout_type.value})")
+            lines.append(
+                f"  {layout.index}: {layout.name} ({layout.layout_type.value})"
+            )
             lines.append(f"      Placeholders: {', '.join(ph_names)}")
             lines.append(f"      Best for: {', '.join(layout.best_for)}")
 
@@ -297,7 +310,7 @@ class Template:
             for r in recommendations
         ]
 
-    def create_presentation(self) -> "Presentation":
+    def create_presentation(self) -> Presentation:
         """Create a new presentation from this template.
 
         Returns a Presentation object with high-level methods for

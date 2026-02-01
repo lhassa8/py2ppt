@@ -7,7 +7,7 @@ with automatic section dividers and intelligent slide type selection.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .analysis import analyze_content, detect_comparison_parts
 
@@ -83,9 +83,9 @@ class PresentationSpec:
 
 
 def build_presentation(
-    template: "Template",
+    template: Template,
     spec: PresentationSpec | dict,
-) -> "Presentation":
+) -> Presentation:
     """Build a complete presentation from a specification.
 
     Automatically:
@@ -172,14 +172,14 @@ def build_presentation(
 
 
 def build_from_outline(
-    template: "Template",
+    template: Template,
     title: str,
     outline: list[dict | str],
     *,
     subtitle: str = "",
     closing: str = "Thank You",
     auto_sections: bool = True,
-) -> "Presentation":
+) -> Presentation:
     """Build a presentation from a simple outline.
 
     A more flexible alternative to build_presentation() that
@@ -243,7 +243,7 @@ def _dict_to_presentation_spec(d: dict) -> PresentationSpec:
     return PresentationSpec(
         title=d.get("title", "Untitled"),
         subtitle=d.get("subtitle", ""),
-        sections=sections,
+        sections=cast(list[SectionSpec | dict[Any, Any]], sections),
         closing_title=d.get("closing_title", d.get("closing", "")),
         closing_content=d.get("closing_content"),
         title_layout=d.get("title_layout"),
@@ -263,7 +263,7 @@ def _dict_to_section_spec(d: dict) -> SectionSpec:
 
     return SectionSpec(
         title=d.get("title", ""),
-        slides=slides,
+        slides=cast(list[SlideSpec | dict[Any, Any]], slides),
         include_divider=d.get("include_divider", True),
     )
 
@@ -276,18 +276,32 @@ def _dict_to_slide_spec(d: dict) -> SlideSpec:
         slide_type=d.get("slide_type") or d.get("type"),
         layout=d.get("layout"),
         notes=d.get("notes", ""),
-        extra={k: v for k, v in d.items()
-               if k not in ("title", "content", "slide_type", "type", "layout", "notes", "section")},
+        extra={
+            k: v
+            for k, v in d.items()
+            if k
+            not in (
+                "title",
+                "content",
+                "slide_type",
+                "type",
+                "layout",
+                "notes",
+                "section",
+            )
+        },
     )
 
 
-def _add_slide_from_spec(pres: "Presentation", slide: SlideSpec) -> int:
+def _add_slide_from_spec(pres: Presentation, slide: SlideSpec) -> int:
     """Add a slide to the presentation based on spec."""
     slide_type = slide.slide_type
 
     # Auto-detect slide type from content if not specified
     if slide_type is None and slide.content:
-        analysis = analyze_content(slide.content, slide.title)
+        # Convert content to list[str] for analysis
+        content_strs = [str(c) if not isinstance(c, str) else c for c in slide.content]
+        analysis = analyze_content(content_strs, slide.title)
         if analysis.confidence >= 0.5:
             slide_type = analysis.recommended_slide_type
 
@@ -303,7 +317,7 @@ def _add_slide_from_spec(pres: "Presentation", slide: SlideSpec) -> int:
     return slide_num
 
 
-def _dispatch_slide(pres: "Presentation", slide_type: str, slide: SlideSpec) -> int:
+def _dispatch_slide(pres: Presentation, slide_type: str, slide: SlideSpec) -> int:
     """Dispatch to the appropriate slide creation method."""
 
     if slide_type == "comparison":
@@ -328,9 +342,10 @@ def _dispatch_slide(pres: "Presentation", slide_type: str, slide: SlideSpec) -> 
         )
 
     elif slide_type == "quote":
+        quote_text = slide.content[0] if slide.content else slide.extra.get("quote", "")
         return pres.add_quote_slide(
-            slide.content[0] if slide.content else slide.extra.get("quote", ""),
-            slide.extra.get("attribution", ""),
+            str(quote_text) if quote_text else "",
+            str(slide.extra.get("attribution", "")),
             source=slide.extra.get("source"),
             layout=slide.layout,
         )
@@ -350,9 +365,10 @@ def _dispatch_slide(pres: "Presentation", slide_type: str, slide: SlideSpec) -> 
         )
 
     elif slide_type == "agenda":
+        agenda_items = slide.content or slide.extra.get("items", [])
         return pres.add_agenda_slide(
             slide.title,
-            slide.content or slide.extra.get("items", []),
+            [str(item) if not isinstance(item, str) else item for item in agenda_items],
             layout=slide.layout,
         )
 
@@ -386,15 +402,16 @@ def _dispatch_slide(pres: "Presentation", slide_type: str, slide: SlideSpec) -> 
 
     else:
         # Default to content slide
-        return pres.add_content_slide(
+        result = pres.add_content_slide(
             slide.title,
             slide.content or [],
             levels=slide.extra.get("levels"),
             layout=slide.layout,
         )
+        return result if isinstance(result, int) else result["slide_number"]
 
 
-def _add_comparison_slide(pres: "Presentation", slide: SlideSpec) -> int:
+def _add_comparison_slide(pres: Presentation, slide: SlideSpec) -> int:
     """Add a comparison slide, auto-detecting parts if needed."""
     # Check if comparison parts are explicitly provided
     if "left_heading" in slide.extra:
@@ -409,9 +426,7 @@ def _add_comparison_slide(pres: "Presentation", slide: SlideSpec) -> int:
 
     # Try to auto-detect comparison parts from content
     if slide.content:
-        content_strs = [
-            c if isinstance(c, str) else str(c) for c in slide.content
-        ]
+        content_strs = [c if isinstance(c, str) else str(c) for c in slide.content]
         parts = detect_comparison_parts(content_strs, slide.title)
         if parts:
             return pres.add_comparison_slide(
@@ -424,14 +439,15 @@ def _add_comparison_slide(pres: "Presentation", slide: SlideSpec) -> int:
             )
 
     # Fall back to regular content
-    return pres.add_content_slide(
+    result = pres.add_content_slide(
         slide.title,
         slide.content or [],
         layout=slide.layout,
     )
+    return result if isinstance(result, int) else result["slide_number"]
 
 
-def _add_two_column_slide(pres: "Presentation", slide: SlideSpec) -> int:
+def _add_two_column_slide(pres: Presentation, slide: SlideSpec) -> int:
     """Add a two-column slide, splitting content if needed."""
     # Check if columns are explicitly provided
     if "left_content" in slide.extra:

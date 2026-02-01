@@ -321,7 +321,6 @@ def detect_comparison_parts(
 
     title_lower = title.lower()
     content_lower = [c.lower() if isinstance(c, str) else "" for c in content]
-    full_text = " ".join(content_lower)
 
     # Look for explicit markers in content
     markers = {
@@ -429,9 +428,7 @@ def suggest_slide_type(
             "reason": "Title suggests a quotation",
         }
 
-    if any(
-        w in title_lower for w in ["vs", "versus", "comparison", "compare", "vs."]
-    ):
+    if any(w in title_lower for w in ["vs", "versus", "comparison", "compare", "vs."]):
         return {
             "slide_type": "comparison",
             "layout": "comparison",

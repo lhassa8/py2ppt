@@ -113,10 +113,7 @@ def map_placeholder_role(
         The semantic role for this placeholder
     """
     # First check direct type mapping
-    if ph_type in TYPE_TO_ROLE:
-        base_role = TYPE_TO_ROLE[ph_type]
-    else:
-        base_role = PlaceholderRole.UNKNOWN
+    base_role = TYPE_TO_ROLE.get(ph_type, PlaceholderRole.UNKNOWN)
 
     # For body placeholders, determine left/right/top/bottom based on position
     if base_role == PlaceholderRole.CONTENT:
@@ -127,7 +124,9 @@ def map_placeholder_role(
             return PlaceholderRole.CONTENT
         elif len(body_phs) == 2:
             # Two content areas - determine left/right or top/bottom
-            other = [p for p in body_phs if p.get("idx") != ph_idx][0] if body_phs else None
+            other = (
+                [p for p in body_phs if p.get("idx") != ph_idx][0] if body_phs else None
+            )
 
             if other:
                 other_x = other.get("x", 0)
@@ -139,10 +138,18 @@ def map_placeholder_role(
 
                 if x_diff > y_diff:
                     # Side by side
-                    return PlaceholderRole.LEFT_CONTENT if x < other_x else PlaceholderRole.RIGHT_CONTENT
+                    return (
+                        PlaceholderRole.LEFT_CONTENT
+                        if x < other_x
+                        else PlaceholderRole.RIGHT_CONTENT
+                    )
                 else:
                     # Stacked
-                    return PlaceholderRole.TOP_CONTENT if y < other_y else PlaceholderRole.BOTTOM_CONTENT
+                    return (
+                        PlaceholderRole.TOP_CONTENT
+                        if y < other_y
+                        else PlaceholderRole.BOTTOM_CONTENT
+                    )
         elif len(body_phs) >= 4:
             # Comparison layout: 2 headings + 2 content areas
             # Sort by y position to find headings (top) vs content (bottom)
@@ -150,20 +157,22 @@ def map_placeholder_role(
             top_row = sorted_by_y[:2]
             bottom_row = sorted_by_y[2:4]
 
-            this_ph = {"idx": ph_idx, "x": x, "y": y}
-
             if any(p.get("idx") == ph_idx for p in top_row):
                 # This is a heading
                 sorted_top = sorted(top_row, key=lambda p: p.get("x", 0))
-                return (PlaceholderRole.LEFT_HEADING
-                        if x <= sorted_top[0].get("x", 0) + 100000
-                        else PlaceholderRole.RIGHT_HEADING)
+                return (
+                    PlaceholderRole.LEFT_HEADING
+                    if x <= sorted_top[0].get("x", 0) + 100000
+                    else PlaceholderRole.RIGHT_HEADING
+                )
             else:
                 # This is content
                 sorted_bottom = sorted(bottom_row, key=lambda p: p.get("x", 0))
-                return (PlaceholderRole.LEFT_CONTENT
-                        if x <= sorted_bottom[0].get("x", 0) + 100000
-                        else PlaceholderRole.RIGHT_CONTENT)
+                return (
+                    PlaceholderRole.LEFT_CONTENT
+                    if x <= sorted_bottom[0].get("x", 0) + 100000
+                    else PlaceholderRole.RIGHT_CONTENT
+                )
 
     return base_role
 

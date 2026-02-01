@@ -244,7 +244,10 @@ def validate_slide(
                 message=f"Slide has {total_words} words — may overwhelm audience",
                 suggestion="Consider visuals, splitting content, or summarizing",
                 rule="too_much_text",
-                details={"word_count": total_words, "max_recommended": MAX_WORDS_PER_SLIDE},
+                details={
+                    "word_count": total_words,
+                    "max_recommended": MAX_WORDS_PER_SLIDE,
+                },
             )
         )
     elif total_words > IDEAL_WORDS_PER_SLIDE and not has_table and not has_chart:
@@ -261,7 +264,14 @@ def validate_slide(
         )
 
     # --- Rule: Empty content slide ---
-    if not content and not has_table and not has_chart and not is_blank and not is_title_slide and not is_section:
+    if (
+        not content
+        and not has_table
+        and not has_chart
+        and not is_blank
+        and not is_title_slide
+        and not is_section
+    ):
         issues.append(
             ValidationIssue(
                 severity=IssueSeverity.INFO,
@@ -277,7 +287,7 @@ def validate_slide(
 
 
 def validate_presentation(
-    presentation: "Presentation",
+    presentation: Presentation,
     strict: bool = False,
 ) -> ValidationResult:
     """Validate an entire presentation against design rules.
@@ -352,10 +362,14 @@ def validate_presentation(
         # Check for closing
         if slide_num == slide_count:
             title_lower = slide_info.get("title", "").lower()
-            if any(
-                w in title_lower
-                for w in ["thank", "q&a", "questions", "summary", "conclusion"]
-            ) or "thank" in layout or "q&a" in layout:
+            if (
+                any(
+                    w in title_lower
+                    for w in ["thank", "q&a", "questions", "summary", "conclusion"]
+                )
+                or "thank" in layout
+                or "q&a" in layout
+            ):
                 has_closing = True
 
         # Track section breaks
@@ -390,7 +404,10 @@ def validate_presentation(
                         message=f"Same layout used for {consecutive_same_layout} consecutive slides",
                         suggestion="Vary layouts to maintain visual interest",
                         rule="repetitive_layout",
-                        details={"layout": layout, "consecutive_count": consecutive_same_layout},
+                        details={
+                            "layout": layout,
+                            "consecutive_count": consecutive_same_layout,
+                        },
                     )
                 )
         else:
@@ -443,11 +460,9 @@ def validate_presentation(
     # Determine validity
     error_count = len([i for i in issues if i.severity == IssueSeverity.ERROR])
     warning_count = len([i for i in issues if i.severity == IssueSeverity.WARNING])
-
-    if strict:
-        is_valid = error_count == 0 and warning_count == 0
-    else:
-        is_valid = error_count == 0
+    is_valid = (
+        (error_count == 0 and warning_count == 0) if strict else (error_count == 0)
+    )
 
     return ValidationResult(
         is_valid=is_valid,
@@ -472,7 +487,7 @@ def _calculate_score(issues: list[ValidationIssue]) -> float:
 
 
 def validate_presentation_extended(
-    presentation: "Presentation",
+    presentation: Presentation,
     *,
     strict: bool = False,
     include_accessibility: bool = False,
@@ -511,11 +526,9 @@ def validate_presentation_extended(
     # Determine validity
     error_count = len([i for i in all_issues if i.severity == IssueSeverity.ERROR])
     warning_count = len([i for i in all_issues if i.severity == IssueSeverity.WARNING])
-
-    if strict:
-        is_valid = error_count == 0 and warning_count == 0
-    else:
-        is_valid = error_count == 0
+    is_valid = (
+        (error_count == 0 and warning_count == 0) if strict else (error_count == 0)
+    )
 
     return ValidationResult(
         is_valid=is_valid,
@@ -525,7 +538,7 @@ def validate_presentation_extended(
 
 
 def _check_brand_rules(
-    presentation: "Presentation",
+    presentation: Presentation,
     brand_rules: dict,
 ) -> list[ValidationIssue]:
     """Check presentation against brand rules."""

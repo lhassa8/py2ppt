@@ -5,8 +5,8 @@ Provides PDF export and other format conversions.
 
 from __future__ import annotations
 
-import subprocess
 import shutil
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,7 +23,7 @@ class ExportError(Py2PptError):
 
 
 def save_pdf(
-    presentation: "Presentation",
+    presentation: Presentation,
     path: str | Path,
     *,
     engine: str = "libreoffice",
@@ -139,13 +139,13 @@ def _export_with_libreoffice(pptx_path: Path, pdf_path: Path) -> None:
             "LibreOffice export timed out",
             suggestion="The presentation may be too large or LibreOffice is stuck",
             code="EXPORT_TIMEOUT",
-        )
+        ) from None
     except FileNotFoundError:
         raise ExportError(
             f"Could not execute LibreOffice: {libreoffice}",
             suggestion="Verify LibreOffice installation",
             code="LIBREOFFICE_NOT_FOUND",
-        )
+        ) from None
 
 
 def _export_with_unoconv(pptx_path: Path, pdf_path: Path) -> None:
@@ -193,7 +193,7 @@ def _export_with_unoconv(pptx_path: Path, pdf_path: Path) -> None:
             "unoconv export timed out",
             suggestion="The presentation may be too large",
             code="EXPORT_TIMEOUT",
-        )
+        ) from None
 
 
 def is_pdf_export_available() -> dict[str, bool]:

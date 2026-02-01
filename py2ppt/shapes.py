@@ -7,11 +7,10 @@ in PowerPoint presentations.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
 
-from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
-from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.util import Emu, Inches, Pt
 
 
 class ShapeType(str, Enum):
@@ -138,7 +137,7 @@ def get_mso_shape(shape_type: ShapeType | str) -> int:
             raise ValueError(
                 f"Unknown shape type: {shape_type}. "
                 f"Valid types: {', '.join(s.value for s in ShapeType)}"
-            )
+            ) from None
 
     if shape_type not in _SHAPE_TYPE_MAP:
         raise ValueError(f"Shape type {shape_type} is not mapped to MSO_SHAPE")
@@ -165,7 +164,7 @@ def get_mso_connector(connector_type: ConnectorType | str) -> int:
             raise ValueError(
                 f"Unknown connector type: {connector_type}. "
                 f"Valid types: {', '.join(c.value for c in ConnectorType)}"
-            )
+            ) from None
 
     if connector_type not in _CONNECTOR_TYPE_MAP:
         raise ValueError(
@@ -219,6 +218,6 @@ def parse_dimension(value: float | int | None, unit: str = "inches") -> int | No
     elif unit == "pt":
         return Pt(value)
     elif unit == "emu":
-        return Emu(value)
+        return Emu(int(value))
     else:
         return Inches(value)

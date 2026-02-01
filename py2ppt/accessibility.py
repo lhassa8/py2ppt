@@ -39,7 +39,7 @@ class AccessibilityCheck:
     details: dict[str, Any] = field(default_factory=dict)
 
 
-def check_accessibility(presentation: "Presentation") -> ValidationResult:
+def check_accessibility(presentation: Presentation) -> ValidationResult:
     """Check presentation for accessibility issues.
 
     Checks:
@@ -81,7 +81,7 @@ def check_accessibility(presentation: "Presentation") -> ValidationResult:
 
 
 def _check_slide_accessibility(
-    presentation: "Presentation",
+    presentation: Presentation,
     slide_num: int,
 ) -> list[ValidationIssue]:
     """Check a single slide for accessibility issues."""
@@ -163,9 +163,7 @@ def _check_slide_accessibility(
 
     # Check for too much text
     content = slide_info.get("content", [])
-    total_words = sum(
-        len(str(c).split()) for c in content if isinstance(c, str)
-    )
+    total_words = sum(len(str(c).split()) for c in content if isinstance(c, str))
     title = slide_info.get("title", "")
     total_words += len(title.split())
 
@@ -218,7 +216,9 @@ def _calculate_accessibility_score(issues: list[ValidationIssue]) -> float:
     return max(0.0, min(100.0, score))
 
 
-def set_alt_text(presentation: "Presentation", slide_num: int, shape_name: str, alt_text: str) -> None:
+def set_alt_text(
+    presentation: Presentation, slide_num: int, shape_name: str, alt_text: str
+) -> None:
     """Set alt text for an image or shape.
 
     Args:

@@ -28,7 +28,7 @@ class ThemeHelper:
         {'text': 'Key point', 'bold': True}
     """
 
-    def __init__(self, template: "Template") -> None:
+    def __init__(self, template: Template) -> None:
         """Initialize with a template.
 
         Args:
@@ -261,9 +261,7 @@ class ThemeHelper:
             **kwargs,
         }
 
-    def sized(
-        self, text: str, size: int, **kwargs: Any
-    ) -> dict[str, Any]:
+    def sized(self, text: str, size: int, **kwargs: Any) -> dict[str, Any]:
         """Create text with specific font size.
 
         Args:

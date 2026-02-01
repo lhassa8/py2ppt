@@ -6,8 +6,12 @@ properly formatted PowerPoint content.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+# Type alias for content items
+ContentItem = str | tuple[Any, ...] | dict[str, Any] | list[Any]
 
 
 @dataclass
@@ -95,7 +99,7 @@ def parse_content_item(item: str | tuple | dict | list) -> FormattedParagraph:
 
 
 def parse_content(
-    content: str | list[str | tuple | dict | list],
+    content: str | Sequence[ContentItem],
     levels: list[int] | None = None,
 ) -> list[FormattedParagraph]:
     """Parse content into a list of formatted paragraphs.
@@ -145,7 +149,9 @@ def parse_content(
     return paragraphs
 
 
-def format_for_py2ppt(paragraphs: list[FormattedParagraph]) -> tuple[list, list[int]]:
+def format_for_py2ppt(
+    paragraphs: list[FormattedParagraph],
+) -> tuple[list[Any], list[int]]:
     """Convert formatted paragraphs to py2ppt format.
 
     Args:
@@ -154,8 +160,8 @@ def format_for_py2ppt(paragraphs: list[FormattedParagraph]) -> tuple[list, list[
     Returns:
         Tuple of (content_list, levels_list) for py2ppt's set_body()
     """
-    content = []
-    levels = []
+    content: list[Any] = []
+    levels: list[int] = []
 
     for para in paragraphs:
         if len(para.runs) == 1 and not _has_special_formatting(para.runs[0]):
@@ -163,9 +169,9 @@ def format_for_py2ppt(paragraphs: list[FormattedParagraph]) -> tuple[list, list[
             content.append(para.runs[0].text)
         else:
             # Rich text - convert to list of dicts
-            rich_text = []
+            rich_text: list[dict[str, Any]] = []
             for run in para.runs:
-                run_dict = {"text": run.text}
+                run_dict: dict[str, Any] = {"text": run.text}
                 if run.bold:
                     run_dict["bold"] = True
                 if run.italic:
@@ -229,9 +235,7 @@ def auto_bullets(items: list[str], auto_level: bool = True) -> list[FormattedPar
             level = spaces // 4
 
             # Also check for dash prefixes
-            if stripped.startswith("- "):
-                stripped = stripped[2:]
-            elif stripped.startswith("* "):
+            if stripped.startswith("- ") or stripped.startswith("* "):
                 stripped = stripped[2:]
 
             para.add_text(stripped)
@@ -245,8 +249,8 @@ def auto_bullets(items: list[str], auto_level: bool = True) -> list[FormattedPar
 
 
 def format_comparison_content(
-    left_items: list[str | dict],
-    right_items: list[str | dict],
+    left_items: Sequence[str | dict[str, Any]],
+    right_items: Sequence[str | dict[str, Any]],
 ) -> dict[str, list[FormattedParagraph]]:
     """Format content for a comparison slide.
 

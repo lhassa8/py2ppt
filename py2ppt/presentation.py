@@ -6,33 +6,37 @@ AI-friendly, intent-based APIs.
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pptx import Presentation as PptxPresentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import PP_PLACEHOLDER, MSO_SHAPE_TYPE, MSO_CONNECTOR
-from pptx.enum.text import MSO_AUTO_SIZE
-from pptx.enum.chart import XL_CHART_TYPE
 from pptx.chart.data import CategoryChartData
+from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE
+from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
+from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.oxml.ns import qn
-from pptx.opc.constants import RELATIONSHIP_TYPE as RT
-import copy
+from pptx.util import Inches, Pt
 
+from .analysis import analyze_content
 from .errors import (
-    SlideNotFoundError,
-    LayoutNotFoundError,
     InvalidDataError,
+    LayoutNotFoundError,
+    SlideNotFoundError,
 )
 from .formatting import format_for_py2ppt, parse_content
 from .layout import LayoutType
-from .analysis import analyze_content
 from .theme import ThemeHelper
-from .validation import validate_presentation, ValidationResult
+from .validation import ValidationResult
 
 if TYPE_CHECKING:
     from .template import Template
+
+# Type alias for flexible content items
+ContentItem = str | tuple[Any, ...] | dict[str, Any] | list[Any]
+ContentList = str | Sequence[ContentItem]
 
 # Chart type mapping
 _CHART_TYPE_MAP = {
@@ -65,7 +69,7 @@ class Presentation:
         >>> pres.save("output.pptx")
     """
 
-    def __init__(self, template: "Template") -> None:
+    def __init__(self, template: Template) -> None:
         """Initialize from a Template.
 
         Use Template.create_presentation() instead of this constructor.
@@ -74,7 +78,7 @@ class Presentation:
         self._layouts = template._layouts
 
         # Create python-pptx presentation from template
-        self._pptx = PptxPresentation(template.path)
+        self._pptx = PptxPresentation(str(template.path))
 
         # Remove existing slides (keep only layouts/masters)
         while len(self._pptx.slides) > 0:
@@ -88,7 +92,7 @@ class Presentation:
         return len(self._pptx.slides)
 
     @property
-    def template(self) -> "Template":
+    def template(self) -> Template:
         """Get the template this presentation was created from."""
         return self._template
 
@@ -152,13 +156,13 @@ class Presentation:
 
         # Fuzzy name match
         layout_lower = layout.lower()
-        for l in self._layouts:
-            if layout_lower in l.name.lower() or l.name.lower() in layout_lower:
-                return l.index
+        for lay in self._layouts:
+            if layout_lower in lay.name.lower() or lay.name.lower() in layout_lower:
+                return lay.index
 
         raise LayoutNotFoundError(
             f"No layout matching '{layout}' found.",
-            suggestion=f"Available layouts: {', '.join(l.name for l in self._layouts)}.",
+            suggestion=f"Available layouts: {', '.join(lay.name for lay in self._layouts)}.",
             code="LAYOUT_NOT_FOUND",
         )
 
@@ -232,10 +236,7 @@ class Presentation:
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
 
         for i, item in enumerate(content):
-            if i == 0:
-                p = tf.paragraphs[0]
-            else:
-                p = tf.add_paragraph()
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
 
             # Set level
             if levels and i < len(levels):
@@ -338,12 +339,12 @@ class Presentation:
     def add_content_slide(
         self,
         title: str,
-        content: str | list[str | tuple | dict | list],
+        content: ContentList,
         *,
         levels: list[int] | None = None,
         layout: str | int | None = None,
         warn_overflow: bool = False,
-    ) -> int | dict:
+    ) -> int | dict[str, Any]:
         """Add a content slide with bullets.
 
         Args:
@@ -407,8 +408,8 @@ class Presentation:
     def add_two_column_slide(
         self,
         title: str,
-        left_content: list[str | tuple | dict | list],
-        right_content: list[str | tuple | dict | list],
+        left_content: Sequence[ContentItem],
+        right_content: Sequence[ContentItem],
         *,
         left_levels: list[int] | None = None,
         right_levels: list[int] | None = None,
@@ -472,9 +473,9 @@ class Presentation:
         self,
         title: str,
         left_heading: str,
-        left_content: list[str | tuple | dict | list],
+        left_content: Sequence[ContentItem],
         right_heading: str,
-        right_content: list[str | tuple | dict | list],
+        right_content: Sequence[ContentItem],
         *,
         layout: str | int | None = None,
     ) -> int:
@@ -562,11 +563,7 @@ class Presentation:
                 *list(right_content),
             ]
             combined_levels = (
-                [0]
-                + [1] * len(left_content)
-                + [0]
-                + [0]
-                + [1] * len(right_content)
+                [0] + [1] * len(left_content) + [0] + [0] + [1] * len(right_content)
             )
             paragraphs = parse_content(combined, combined_levels)
             formatted, lvls = format_for_py2ppt(paragraphs)
@@ -631,9 +628,7 @@ class Presentation:
                 added = True
 
             # 2. Explicit dimensions
-            if not added and any(
-                v is not None for v in [left, top, width, height]
-            ):
+            if not added and any(v is not None for v in [left, top, width, height]):
                 pic_left = Inches(left) if left is not None else Inches(1)
                 pic_top = Inches(top) if top is not None else Inches(2)
                 pic_width = Inches(width) if width is not None else None
@@ -651,9 +646,7 @@ class Presentation:
             if not added:
                 body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.BODY)
                 if body_ph is None:
-                    body_ph = self._get_placeholder(
-                        slide, PP_PLACEHOLDER.OBJECT
-                    )
+                    body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.OBJECT)
                 if body_ph is not None:
                     slide.shapes.add_picture(
                         str(image_path),
@@ -771,9 +764,7 @@ class Presentation:
                 max_lengths.append(max(max_len, 1))
             total_len = sum(max_lengths)
             for c in range(num_cols):
-                table.columns[c].width = int(
-                    tbl_width * max_lengths[c] / total_len
-                )
+                table.columns[c].width = int(tbl_width * max_lengths[c] / total_len)
 
         # Set headers
         for c, header in enumerate(headers):
@@ -805,9 +796,7 @@ class Presentation:
                         for c in range(num_cols):
                             cell = table.cell(r + 1, c)
                             cell.fill.solid()
-                            cell.fill.fore_color.rgb = RGBColor(
-                                0xF2, 0xF2, 0xF2
-                            )
+                            cell.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
 
         # "plain" style: no special formatting
 
@@ -916,9 +905,11 @@ class Presentation:
         chart = chart_shape.chart
 
         # Add legend for multi-series charts
-        if chart_type_lower not in ("pie", "doughnut"):
-            if len(data.get("series", [])) > 1:
-                chart.has_legend = True
+        if (
+            chart_type_lower not in ("pie", "doughnut")
+            and len(data.get("series", [])) > 1
+        ):
+            chart.has_legend = True
 
         return len(self._pptx.slides)
 
@@ -1010,12 +1001,13 @@ class Presentation:
 
         else:
             # Default to content slide
-            return self.add_content_slide(
+            result = self.add_content_slide(
                 title,
                 content or [],
                 levels=kwargs.get("levels"),
                 layout=layout,
             )
+            return result if isinstance(result, int) else result["slide_number"]
 
     def set_notes(self, slide_number: int, notes: str) -> None:
         """Set speaker notes for a slide.
@@ -1076,16 +1068,19 @@ class Presentation:
         content = []
         has_content = False
         for shape in slide.placeholders:
-            if shape.placeholder_format.type in (
-                PP_PLACEHOLDER.BODY,
-                PP_PLACEHOLDER.OBJECT,
+            if (
+                shape.placeholder_format.type
+                in (
+                    PP_PLACEHOLDER.BODY,
+                    PP_PLACEHOLDER.OBJECT,
+                )
+                and shape.has_text_frame
             ):
-                if shape.has_text_frame:
-                    for p in shape.text_frame.paragraphs:
-                        if p.text:
-                            content.append(p.text)
-                    if content:
-                        has_content = True
+                for p in shape.text_frame.paragraphs:
+                    if p.text:
+                        content.append(p.text)
+                if content:
+                    has_content = True
 
         # Inspect all shapes
         has_table = False
@@ -1109,9 +1104,7 @@ class Presentation:
                 table_data = {
                     "rows": len(tbl.rows),
                     "cols": len(tbl.columns),
-                    "headers": [
-                        tbl.cell(0, c).text for c in range(len(tbl.columns))
-                    ],
+                    "headers": [tbl.cell(0, c).text for c in range(len(tbl.columns))],
                 }
                 shape_info["table"] = table_data
 
@@ -1160,10 +1153,7 @@ class Presentation:
             >>> for slide in pres.describe_all_slides():
             ...     print(f"Slide {slide['slide_number']}: {slide['title']}")
         """
-        return [
-            self.describe_slide(i + 1)
-            for i in range(len(self._pptx.slides))
-        ]
+        return [self.describe_slide(i + 1) for i in range(len(self._pptx.slides))]
 
     # --- Editing methods ---
 
@@ -1172,7 +1162,7 @@ class Presentation:
         n: int,
         *,
         title: str | None = None,
-        content: list[str | tuple | dict | list] | None = None,
+        content: Sequence[ContentItem] | None = None,
         levels: list[int] | None = None,
         notes: str | None = None,
     ) -> dict[str, Any]:
@@ -1200,9 +1190,7 @@ class Presentation:
         if title is not None:
             title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.TITLE)
             if title_ph is None:
-                title_ph = self._get_placeholder(
-                    slide, PP_PLACEHOLDER.CENTER_TITLE
-                )
+                title_ph = self._get_placeholder(slide, PP_PLACEHOLDER.CENTER_TITLE)
             self._set_text_frame(title_ph, title)
 
         if content is not None:
@@ -1210,12 +1198,8 @@ class Presentation:
             formatted_content, formatted_levels = format_for_py2ppt(paragraphs)
             body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.BODY)
             if body_ph is None:
-                body_ph = self._get_placeholder(
-                    slide, PP_PLACEHOLDER.OBJECT
-                )
-            self._set_body_content(
-                body_ph, formatted_content, formatted_levels
-            )
+                body_ph = self._get_placeholder(slide, PP_PLACEHOLDER.OBJECT)
+            self._set_body_content(body_ph, formatted_content, formatted_levels)
 
         if notes is not None:
             self.set_notes(n, notes)
@@ -1303,7 +1287,7 @@ class Presentation:
     def add_content_slides(
         self,
         title: str,
-        content: str | list[str | tuple | dict | list],
+        content: ContentList,
         *,
         max_bullets: int = 6,
         continuation_suffix: str = " (cont.)",
@@ -1335,7 +1319,7 @@ class Presentation:
         """
         # Normalize content to list
         if isinstance(content, str):
-            content_list: list[str | tuple | dict | list] = [
+            content_list: list[ContentItem] = [
                 line for line in content.split("\n") if line.strip()
             ]
         else:
@@ -1358,17 +1342,16 @@ class Presentation:
 
         slide_numbers = []
         for i, chunk_indices in enumerate(chunks):
-            slide_title = (
-                title if i == 0 else f"{title}{continuation_suffix}"
-            )
+            slide_title = title if i == 0 else f"{title}{continuation_suffix}"
             chunk_content = [content_list[j] for j in chunk_indices]
             chunk_levels = [paragraphs[j].level for j in chunk_indices]
-            slide_num = self.add_content_slide(
+            result = self.add_content_slide(
                 slide_title,
                 chunk_content,
                 levels=chunk_levels,
                 layout=layout,
             )
+            slide_num = result if isinstance(result, int) else result["slide_number"]
             slide_numbers.append(slide_num)
 
         return slide_numbers
@@ -1378,7 +1361,7 @@ class Presentation:
     def add_smart_slide(
         self,
         title: str,
-        content: str | list[str | dict | list],
+        content: ContentList,
         *,
         layout: str | int | None = None,
     ) -> int:
@@ -1402,36 +1385,48 @@ class Presentation:
             ...     "After: fast and automated"
             ... ])  # Auto-detects comparison
         """
-        analysis = analyze_content(content, title)
+        # Normalize content to list for analysis
+        if isinstance(content, str):
+            content_items: list[str] = [
+                line for line in content.split("\n") if line.strip()
+            ]
+        else:
+            content_items = [
+                str(item) if not isinstance(item, str) else item for item in content
+            ]
+
+        analysis = analyze_content(content_items, title)
 
         if analysis.confidence >= 0.5:
             slide_type = analysis.recommended_slide_type
         else:
             slide_type = "content"
 
+        # Helper to extract int from add_content_slide result
+        def _to_int(result: int | dict[str, Any]) -> int:
+            return result if isinstance(result, int) else result["slide_number"]
+
         # Route to appropriate method based on detected type
         if slide_type == "comparison":
             # Use add_content_slide since we don't have explicit parts
-            return self.add_content_slide(title, content, layout=layout)
+            return _to_int(self.add_content_slide(title, content, layout=layout))
         elif slide_type == "quote":
-            content_list = content if isinstance(content, list) else [content]
-            quote = content_list[0] if content_list else ""
-            attribution = content_list[1] if len(content_list) > 1 else ""
-            return self.add_quote_slide(quote, attribution, layout=layout)
+            quote = content_items[0] if content_items else ""
+            attribution = content_items[1] if len(content_items) > 1 else ""
+            return self.add_quote_slide(str(quote), str(attribution), layout=layout)
         elif slide_type == "stats":
             # Parse stats from content
-            stats = []
-            content_list = content if isinstance(content, list) else content.split("\n")
-            for item in content_list:
-                if isinstance(item, str):
-                    stats.append({"value": item, "label": ""})
+            stats: list[dict[str, str]] = []
+            for item in content_items:
+                stats.append({"value": str(item), "label": ""})
             return self.add_stats_slide(title, stats, layout=layout)
         elif slide_type == "timeline":
-            content_list = content if isinstance(content, list) else content.split("\n")
-            return self.add_timeline_slide(title, content_list, layout=layout)
+            timeline_items: list[str | dict[str, str]] = [
+                str(item) for item in content_items
+            ]
+            return self.add_timeline_slide(title, timeline_items, layout=layout)
         else:
-            content_list = content if isinstance(content, list) else [content]
-            return self.add_content_slide(title, content_list, layout=layout)
+            return _to_int(self.add_content_slide(title, content, layout=layout))
 
     def add_quote_slide(
         self,
@@ -1468,10 +1463,10 @@ class Presentation:
         slide = self._pptx.slides.add_slide(slide_layout)
 
         # Build formatted quote content
-        content = []
+        content: list[Any] = []
 
         # Quote with large italic formatting
-        quote_fmt = {
+        quote_fmt: dict[str, Any] = {
             "text": f'"{quote}"',
             "italic": True,
             "font_size": 28,
@@ -1604,7 +1599,7 @@ class Presentation:
         self._set_text_frame(title_ph, title)
 
         # Build formatted timeline content
-        content = []
+        content: list[Any] = []
         accent_color = self._template.colors.get("accent1", "#4472C4")
 
         for event in events:
@@ -1818,7 +1813,7 @@ class Presentation:
             if italic:
                 run.font.italic = True
 
-        return shape.name
+        return str(shape.name)
 
     def add_shape(
         self,
@@ -1859,7 +1854,7 @@ class Presentation:
             >>> pres.add_shape(1, "rectangle", 1, 2, 3, 2, fill_color="#4472C4")
             >>> pres.add_shape(1, "oval", 5, 2, 2, 2, text="Step 1")
         """
-        from .shapes import get_mso_shape, ShapeType
+        from .shapes import get_mso_shape
 
         self._validate_slide_number(slide_num)
         slide = self._pptx.slides[slide_num - 1]
@@ -1915,7 +1910,7 @@ class Presentation:
                             int(color_hex[4:6], 16),
                         )
 
-        return shape.name
+        return str(shape.name)
 
     def add_connector(
         self,
@@ -2001,7 +1996,7 @@ class Presentation:
         if line_width is not None:
             connector.line.width = Pt(line_width)
 
-        return connector.name
+        return str(connector.name)
 
     def style_shape(
         self,
@@ -2161,20 +2156,44 @@ class Presentation:
 
         # Add quadrants
         _add_labeled_box(
-            slide, margin, start_top, box_width, box_height,
-            "Strengths", strengths, colors.primary
+            slide,
+            margin,
+            start_top,
+            box_width,
+            box_height,
+            "Strengths",
+            strengths,
+            colors.primary,
         )
         _add_labeled_box(
-            slide, margin + box_width + gap, start_top, box_width, box_height,
-            "Weaknesses", weaknesses, colors.secondary
+            slide,
+            margin + box_width + gap,
+            start_top,
+            box_width,
+            box_height,
+            "Weaknesses",
+            weaknesses,
+            colors.secondary,
         )
         _add_labeled_box(
-            slide, margin, start_top + box_height + gap, box_width, box_height,
-            "Opportunities", opportunities, colors.tertiary
+            slide,
+            margin,
+            start_top + box_height + gap,
+            box_width,
+            box_height,
+            "Opportunities",
+            opportunities,
+            colors.tertiary,
         )
         _add_labeled_box(
-            slide, margin + box_width + gap, start_top + box_height + gap, box_width, box_height,
-            "Threats", threats, "#C00000"  # Red for threats
+            slide,
+            margin + box_width + gap,
+            start_top + box_height + gap,
+            box_width,
+            box_height,
+            "Threats",
+            threats,
+            "#C00000",  # Red for threats
         )
 
         return len(self._pptx.slides)
@@ -2245,27 +2264,53 @@ class Presentation:
 
         # Add quadrants
         _add_labeled_box(
-            slide, margin_left, start_top, box_width, box_height,
-            labels[0], top_left, colors.primary
+            slide,
+            margin_left,
+            start_top,
+            box_width,
+            box_height,
+            labels[0],
+            top_left,
+            colors.primary,
         )
         _add_labeled_box(
-            slide, margin_left + box_width + gap, start_top, box_width, box_height,
-            labels[1], top_right, colors.secondary
+            slide,
+            margin_left + box_width + gap,
+            start_top,
+            box_width,
+            box_height,
+            labels[1],
+            top_right,
+            colors.secondary,
         )
         _add_labeled_box(
-            slide, margin_left, start_top + box_height + gap, box_width, box_height,
-            labels[2], bottom_left, colors.tertiary
+            slide,
+            margin_left,
+            start_top + box_height + gap,
+            box_width,
+            box_height,
+            labels[2],
+            bottom_left,
+            colors.tertiary,
         )
         _add_labeled_box(
-            slide, margin_left + box_width + gap, start_top + box_height + gap, box_width, box_height,
-            labels[3], bottom_right, colors.quaternary
+            slide,
+            margin_left + box_width + gap,
+            start_top + box_height + gap,
+            box_width,
+            box_height,
+            labels[3],
+            bottom_right,
+            colors.quaternary,
         )
 
         # Add axis labels
         if x_label:
             x_label_shape = slide.shapes.add_textbox(
-                Inches(margin_left + box_width), Inches(start_top + 2 * box_height + gap + 0.2),
-                Inches(2), Inches(0.4)
+                Inches(margin_left + box_width),
+                Inches(start_top + 2 * box_height + gap + 0.2),
+                Inches(2),
+                Inches(0.4),
             )
             tf = x_label_shape.text_frame
             tf.paragraphs[0].text = x_label
@@ -2273,8 +2318,7 @@ class Presentation:
 
         if y_label:
             y_label_shape = slide.shapes.add_textbox(
-                Inches(0.2), Inches(start_top + box_height),
-                Inches(0.6), Inches(2)
+                Inches(0.2), Inches(start_top + box_height), Inches(0.6), Inches(2)
             )
             tf = y_label_shape.text_frame
             tf.paragraphs[0].text = y_label
@@ -2557,8 +2601,10 @@ class Presentation:
 
             # Add step number below
             num_shape = slide.shapes.add_textbox(
-                Inches(left), Inches(top + step_height + 0.1),
-                Inches(step_width), Inches(0.4)
+                Inches(left),
+                Inches(top + step_height + 0.1),
+                Inches(step_width),
+                Inches(0.4),
             )
             tf = num_shape.text_frame
             tf.paragraphs[0].text = str(i + 1)
@@ -2597,8 +2643,8 @@ class Presentation:
             ...     intersection_label="Ideal Candidate"
             ... )
         """
-        from pptx.enum.shapes import MSO_SHAPE
         from lxml import etree
+        from pptx.enum.shapes import MSO_SHAPE
 
         layout_idx = self._find_layout(layout, LayoutType.TITLE_ONLY)
         slide_layout = self._pptx.slide_layouts[layout_idx]
@@ -2692,8 +2738,7 @@ class Presentation:
         # Add intersection label
         if intersection_label:
             inter_shape = slide.shapes.add_textbox(
-                Inches(center_x - 0.5), Inches(center_y),
-                Inches(1.5), Inches(0.5)
+                Inches(center_x - 0.5), Inches(center_y), Inches(1.5), Inches(0.5)
             )
             tf = inter_shape.text_frame
             tf.paragraphs[0].text = intersection_label
@@ -2729,7 +2774,6 @@ class Presentation:
             >>> pres.clone_slide(1)  # Clone slide 1
             >>> pres.slide_count  # Now 2 slides
         """
-        from lxml import etree
 
         self._validate_slide_number(source_num)
         source_slide = self._pptx.slides[source_num - 1]
@@ -2767,7 +2811,7 @@ class Presentation:
 
     def clone_slide_from(
         self,
-        other_pres: "Presentation",
+        other_pres: Presentation,
         source_num: int,
         *,
         insert_at: int | None = None,
@@ -2791,7 +2835,6 @@ class Presentation:
             >>> pres2 = template.create_presentation()
             >>> pres2.clone_slide_from(pres1, 1)
         """
-        from lxml import etree
 
         other_pres._validate_slide_number(source_num)
         source_slide = other_pres._pptx.slides[source_num - 1]
@@ -2839,7 +2882,7 @@ class Presentation:
 
     def merge(
         self,
-        other_pres: "Presentation",
+        other_pres: Presentation,
         *,
         insert_at: int | None = None,
     ) -> list[int]:
@@ -2862,15 +2905,11 @@ class Presentation:
             >>> pres2.add_content_slide("Extra Content", ["Item"])
             >>> merged = pres1.merge(pres2)
         """
-        merged_nums = []
+        merged_nums: list[int] = []
         other_count = other_pres.slide_count
 
         for i in range(1, other_count + 1):
-            if insert_at is not None:
-                pos = insert_at + len(merged_nums)
-            else:
-                pos = None
-
+            pos = insert_at + len(merged_nums) if insert_at is not None else None
             new_num = self.clone_slide_from(other_pres, i, insert_at=pos)
             merged_nums.append(new_num)
 
@@ -2879,9 +2918,9 @@ class Presentation:
     @classmethod
     def merge_files(
         cls,
-        template: "Template",
+        template: Template,
         paths: list[str | Path],
-    ) -> "Presentation":
+    ) -> Presentation:
         """Create a new presentation by merging multiple files.
 
         Args:
@@ -2911,7 +2950,7 @@ class Presentation:
                 other_template = TemplateClass(path)
                 other_pres = cls(other_template)
                 # Restore slides from the source file
-                other_pres._pptx = PptxPresentation(path)
+                other_pres._pptx = PptxPresentation(str(path))
 
                 result.merge(other_pres)
             except Exception:
@@ -2943,7 +2982,6 @@ class Presentation:
         """
         self._validate_slide_number(n)
         slide_info = self.describe_slide(n)
-        slide = self._pptx.slides[n - 1]
 
         changes: dict[str, Any] = {
             "slide_number": n,
@@ -3125,17 +3163,19 @@ class Presentation:
                         if text.startswith("[Image:") and text.endswith("]"):
                             prompt = text[7:-1].strip()
 
-                    placeholders.append({
-                        "slide": i + 1,
-                        "placeholder_id": shape.name,
-                        "prompt": prompt,
-                        "bounds": {
-                            "left": shape.left / 914400,
-                            "top": shape.top / 914400,
-                            "width": shape.width / 914400,
-                            "height": shape.height / 914400,
-                        },
-                    })
+                    placeholders.append(
+                        {
+                            "slide": i + 1,
+                            "placeholder_id": shape.name,
+                            "prompt": prompt,
+                            "bounds": {
+                                "left": shape.left / 914400,
+                                "top": shape.top / 914400,
+                                "width": shape.width / 914400,
+                                "height": shape.height / 914400,
+                            },
+                        }
+                    )
 
         return placeholders
 
@@ -3201,7 +3241,7 @@ class Presentation:
         Example:
             >>> pres.save("output.pptx")
         """
-        self._pptx.save(path)
+        self._pptx.save(str(path) if isinstance(path, Path) else path)
 
     def to_markdown(self, path: str | Path | None = None) -> str:
         """Export the presentation to Markdown format.
@@ -3367,7 +3407,7 @@ class Presentation:
             >>> pres.set_theme_color("accent1", "#FF6600")
             >>> pres.save_as_template("custom_template.pptx")
         """
-        self._pptx.save(path)
+        self._pptx.save(str(path) if isinstance(path, Path) else path)
 
     def __repr__(self) -> str:
         return f"Presentation({self.slide_count} slides, template={self._template.path.name})"

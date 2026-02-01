@@ -55,64 +55,64 @@ For AI Agents:
     >>> # Returns sorted list of {name, index, confidence, reason}
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
-from .template import Template
-from .presentation import Presentation
-from .layout import (
-    LayoutType,
-    LayoutDescription,
-    LayoutRecommendation,
-    analyze_layout,
-    classify_layout,
-    recommend_layout,
-)
-from .placeholders import (
-    PlaceholderRole,
-    SemanticPlaceholder,
-    map_placeholders,
-    get_placeholder_purpose,
-)
-from .formatting import (
-    FormattedParagraph,
-    FormattedRun,
-    parse_content,
-    auto_bullets,
-)
-from .errors import (
-    Py2PptError,
-    SlideNotFoundError,
-    LayoutNotFoundError,
-    ContentOverflowError,
-    InvalidDataError,
-)
 from .analysis import (
-    ContentType,
     ContentAnalysis,
+    ContentType,
     analyze_content,
     detect_comparison_parts,
     suggest_slide_type,
 )
+from .builder import (
+    PresentationSpec,
+    SectionSpec,
+    SlideSpec,
+    build_from_outline,
+    build_presentation,
+)
+from .diff import PresentationDiff, diff_presentations
+from .errors import (
+    ContentOverflowError,
+    InvalidDataError,
+    LayoutNotFoundError,
+    Py2PptError,
+    SlideNotFoundError,
+)
+from .export import ExportError, is_pdf_export_available, save_pdf
+from .formatting import (
+    FormattedParagraph,
+    FormattedRun,
+    auto_bullets,
+    parse_content,
+)
+from .layout import (
+    LayoutDescription,
+    LayoutRecommendation,
+    LayoutType,
+    analyze_layout,
+    classify_layout,
+    recommend_layout,
+)
+from .markdown import build_from_markdown
+from .placeholders import (
+    PlaceholderRole,
+    SemanticPlaceholder,
+    get_placeholder_purpose,
+    map_placeholders,
+)
+from .presentation import Presentation
+from .shapes import ConnectorType, ShapeType
+from .template import Template
 from .theme import ThemeHelper
 from .validation import (
-    IssueSeverity,
     IssueCategory,
+    IssueSeverity,
     ValidationIssue,
     ValidationResult,
-    validate_slide,
     validate_presentation,
+    validate_slide,
 )
-from .builder import (
-    SlideSpec,
-    SectionSpec,
-    PresentationSpec,
-    build_presentation,
-    build_from_outline,
-)
-from .shapes import ShapeType, ConnectorType
-from .markdown import build_from_markdown
-from .diff import diff_presentations, PresentationDiff
-from .export import save_pdf, is_pdf_export_available, ExportError
 
 __all__ = [
     # Version

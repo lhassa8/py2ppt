@@ -7,11 +7,11 @@ pyramid, process flow, and Venn diagrams using shapes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.text import PP_ALIGN
+from pptx.util import Inches, Pt
 
 if TYPE_CHECKING:
     from pptx.slide import Slide
@@ -59,7 +59,7 @@ def _parse_color(color: str) -> RGBColor:
 
 
 def _add_labeled_box(
-    slide: "Slide",
+    slide: Slide,
     left: float,
     top: float,
     width: float,
@@ -113,7 +113,7 @@ def _add_labeled_box(
 
 
 def _add_funnel_stage(
-    slide: "Slide",
+    slide: Slide,
     center_x: float,
     top: float,
     width: float,
@@ -159,7 +159,7 @@ def _add_funnel_stage(
 
 
 def _add_pyramid_level(
-    slide: "Slide",
+    slide: Slide,
     center_x: float,
     top: float,
     width: float,
@@ -195,7 +195,7 @@ def _add_pyramid_level(
 
 
 def _add_process_step(
-    slide: "Slide",
+    slide: Slide,
     left: float,
     top: float,
     width: float,
@@ -237,7 +237,7 @@ def _add_process_step(
 
 
 def _add_venn_circle(
-    slide: "Slide",
+    slide: Slide,
     left: float,
     top: float,
     diameter: float,
@@ -247,8 +247,8 @@ def _add_venn_circle(
     transparency: float = 0.5,
 ) -> None:
     """Add a Venn diagram circle with transparency."""
-    from pptx.enum.shapes import MSO_SHAPE
     from lxml import etree
+    from pptx.enum.shapes import MSO_SHAPE
 
     circle = slide.shapes.add_shape(
         MSO_SHAPE.OVAL,

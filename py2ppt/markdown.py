@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .template import Template
     from .presentation import Presentation
+    from .template import Template
 
 
-def to_markdown(presentation: "Presentation", path: str | Path | None = None) -> str:
+def to_markdown(presentation: Presentation, path: str | Path | None = None) -> str:
     """Export a presentation to Markdown format.
 
     Args:
@@ -94,7 +94,7 @@ def to_markdown(presentation: "Presentation", path: str | Path | None = None) ->
 
 
 def _extract_table_info(
-    slide_info: dict[str, Any]
+    slide_info: dict[str, Any],
 ) -> tuple[list[str], list[list[str]]] | None:
     """Extract table headers and rows from slide info."""
     for shape in slide_info.get("shapes", []):
@@ -123,9 +123,9 @@ def _format_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def build_from_markdown(
-    template: "Template",
+    template: Template,
     markdown: str | Path,
-) -> "Presentation":
+) -> Presentation:
     """Build a presentation from Markdown.
 
     Args:
@@ -253,7 +253,9 @@ def build_from_markdown(
             continue
 
         # Notes comment
-        notes_match = re.match(r"^<!--\s*notes?:\s*(.+?)\s*-->$", line_stripped, re.IGNORECASE)
+        notes_match = re.match(
+            r"^<!--\s*notes?:\s*(.+?)\s*-->$", line_stripped, re.IGNORECASE
+        )
         if notes_match:
             current_notes = notes_match.group(1).strip()
             continue

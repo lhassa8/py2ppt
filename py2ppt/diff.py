@@ -51,15 +51,23 @@ class PresentationDiff:
         """Generate human-readable diff text."""
         lines = ["Presentation Diff", "=" * 40]
 
-        if not self.slides_added and not self.slides_removed and not self.slides_modified:
+        if (
+            not self.slides_added
+            and not self.slides_removed
+            and not self.slides_modified
+        ):
             lines.append("No differences found.")
             return "\n".join(lines)
 
         if self.slides_added:
-            lines.append(f"\nSlides Added: {', '.join(str(s) for s in self.slides_added)}")
+            lines.append(
+                f"\nSlides Added: {', '.join(str(s) for s in self.slides_added)}"
+            )
 
         if self.slides_removed:
-            lines.append(f"\nSlides Removed: {', '.join(str(s) for s in self.slides_removed)}")
+            lines.append(
+                f"\nSlides Removed: {', '.join(str(s) for s in self.slides_removed)}"
+            )
 
         if self.slides_modified:
             lines.append("\nModified Slides:")
@@ -74,8 +82,8 @@ class PresentationDiff:
 
 
 def diff_presentations(
-    pres1: "Presentation",
-    pres2: "Presentation",
+    pres1: Presentation,
+    pres2: Presentation,
     *,
     format: str = "dict",
 ) -> PresentationDiff | dict | str:
