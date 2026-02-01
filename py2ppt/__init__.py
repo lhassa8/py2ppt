@@ -55,7 +55,7 @@ For AI Agents:
     >>> # Returns sorted list of {name, index, confidence, reason}
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .template import Template
 from .presentation import Presentation
