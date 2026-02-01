@@ -86,6 +86,33 @@ from .errors import (
     ContentOverflowError,
     InvalidDataError,
 )
+from .analysis import (
+    ContentType,
+    ContentAnalysis,
+    analyze_content,
+    detect_comparison_parts,
+    suggest_slide_type,
+)
+from .theme import ThemeHelper
+from .validation import (
+    IssueSeverity,
+    IssueCategory,
+    ValidationIssue,
+    ValidationResult,
+    validate_slide,
+    validate_presentation,
+)
+from .builder import (
+    SlideSpec,
+    SectionSpec,
+    PresentationSpec,
+    build_presentation,
+    build_from_outline,
+)
+from .shapes import ShapeType, ConnectorType
+from .markdown import build_from_markdown
+from .diff import diff_presentations, PresentationDiff
+from .export import save_pdf, is_pdf_export_available, ExportError
 
 __all__ = [
     # Version
@@ -116,4 +143,37 @@ __all__ = [
     "LayoutNotFoundError",
     "ContentOverflowError",
     "InvalidDataError",
+    # Analysis
+    "ContentType",
+    "ContentAnalysis",
+    "analyze_content",
+    "detect_comparison_parts",
+    "suggest_slide_type",
+    # Theme
+    "ThemeHelper",
+    # Validation
+    "IssueSeverity",
+    "IssueCategory",
+    "ValidationIssue",
+    "ValidationResult",
+    "validate_slide",
+    "validate_presentation",
+    # Builder
+    "SlideSpec",
+    "SectionSpec",
+    "PresentationSpec",
+    "build_presentation",
+    "build_from_outline",
+    # Shapes
+    "ShapeType",
+    "ConnectorType",
+    # Markdown
+    "build_from_markdown",
+    # Diff
+    "diff_presentations",
+    "PresentationDiff",
+    # Export
+    "save_pdf",
+    "is_pdf_export_available",
+    "ExportError",
 ]
